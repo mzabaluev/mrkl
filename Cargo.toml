@@ -1,0 +1,7 @@
+[package]
+name = "mrkl"
+version = "0.0.1-dev"
+authors = ["Mikhail Zabaluev <mikhail.zabaluev@gmail.com>"]
+
+[dependencies]
+digest = "0.7"
