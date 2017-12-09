@@ -6,10 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod hash;
-pub mod leaf;
-pub mod tree;
+use tree::Nodes;
 
-pub mod digest;
 
-pub use tree::MerkleTree;
+pub trait Hasher {
+    type Input;
+    type HashOutput;
+    type LeafData;
+
+    fn hash_data(&self, input: Self::Input)
+                 -> (Self::HashOutput, Self::LeafData);
+
+    fn hash_nodes<'a>(&'a self,
+                      iter: Nodes<'a, Self::HashOutput, Self::LeafData>)
+                      -> Self::HashOutput;
+}

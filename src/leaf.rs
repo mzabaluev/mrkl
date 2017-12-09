@@ -6,10 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod hash;
-pub mod leaf;
-pub mod tree;
-
-pub mod digest;
-
-pub use tree::MerkleTree;
+pub trait LeafData {
+    type Input;
+    type Output;
+    fn leaf_data(&self, input: Self::Input) -> Self::Output;
+}
