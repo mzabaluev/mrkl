@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use hash::Hasher;
-use leaf::LeafData;
+use leaf;
 use tree::{Nodes, Node};
 
 extern crate digest;
@@ -21,15 +21,17 @@ use std::hash::Hasher as StdHasher;
 use std::marker::PhantomData;
 
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct DigestHasher<D, F> {
     leaf_data_extractor: F,
     phantom: PhantomData<D>
 }
 
-impl<D, F> Debug for DigestHasher<D, F> {
+impl<D, F: Debug> Debug for DigestHasher<D, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str("DigestHasher { .. }")
+        f.debug_struct("DigestHasher")
+         .field("leaf_data_extractor", &self.leaf_data_extractor)
+         .finish()
     }
 }
 
@@ -57,9 +59,24 @@ impl<D: digest::Input> StdHasher for HashAdapter<D> {
     }
 }
 
-impl<D, F> DigestHasher<D, F> {
-    pub fn new(leaf_data_extractor: F) -> DigestHasher<D, F> {
-        DigestHasher { leaf_data_extractor, phantom: PhantomData }
+impl<D, F> DigestHasher<D, F>
+    where F: leaf::ExtractData,
+          F: Default
+{
+    pub fn new() -> DigestHasher<D, F> {
+        DigestHasher {
+            leaf_data_extractor: F::default(),
+            phantom: PhantomData
+        }
+    }
+}
+
+impl<D, F: leaf::ExtractData> DigestHasher<D, F> {
+    pub fn with_leaf_data(extractor: F) -> DigestHasher<D, F> {
+        DigestHasher {
+            leaf_data_extractor: extractor,
+            phantom: PhantomData
+        }
     }
 }
 
@@ -67,7 +84,7 @@ impl<D, F> Hasher for DigestHasher<D, F>
     where D: digest::Input,
           D: digest::FixedOutput,
           D: Default,
-          F: LeafData,
+          F: leaf::ExtractData,
           F::Input: StdHash
 {
     type Input = F::Input;
@@ -80,7 +97,7 @@ impl<D, F> Hasher for DigestHasher<D, F>
         let mut hasher = HashAdapter::<D>::new();
         input.hash(&mut hasher);
         let hash = hasher.into_inner().fixed_result();
-        let data = self.leaf_data_extractor.leaf_data(input);
+        let data = self.leaf_data_extractor.extract_data(input);
         (hash, data)
     }
 
