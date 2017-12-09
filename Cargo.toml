@@ -3,5 +3,8 @@ name = "mrkl"
 version = "0.0.1-dev"
 authors = ["Mikhail Zabaluev <mikhail.zabaluev@gmail.com>"]
 
+[features]
+default = ["digest"]
+
 [dependencies]
-digest = "0.7"
+digest = { version = "0.7", optional = true }
