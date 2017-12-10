@@ -10,7 +10,7 @@ pub mod hash;
 pub mod leaf;
 pub mod tree;
 
-#[cfg(feature = "digest")]
+#[cfg(feature = "digest-hasher")]
 pub mod digest;
 
 pub use tree::MerkleTree;
