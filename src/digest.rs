@@ -239,3 +239,25 @@ impl<D, F, Bo> Hasher for DigestHasher<D, F, Bo>
         digest.fixed_result()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DigestHasher;
+    use super::Hasher;
+    use leaf;
+
+    extern crate sha2;
+
+    use self::sha2::{Sha256, Digest};
+
+    const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
+
+    #[test]
+    fn hasher_with_fn() {
+        let hasher = DigestHasher::<Sha256, _>::with_leaf_data(
+                        leaf::extract_with(|s: &[u8]| s.len()));
+        let (hash, data) = hasher.hash_data(TEST_DATA);
+        assert_eq!(hash, Sha256::digest(TEST_DATA));
+        assert_eq!(data, TEST_DATA.len());
+    }
+}
