@@ -21,19 +21,25 @@ use std::marker::PhantomData;
 
 
 #[derive(Clone)]
-pub struct DigestHasher<In: ?Sized, D> {
-    phantom: PhantomData<(*const In, D)>
+pub struct DigestHasher<D> {
+    phantom: PhantomData<D>
 }
 
-impl<In: ?Sized, D> Default for DigestHasher<In, D>
+impl<D> DigestHasher<D>
     where D: EndianInput
 {
-    fn default() -> Self {
+    fn new() -> Self {
         DigestHasher { phantom: PhantomData }
     }
 }
 
-impl<In: ?Sized, D> Debug for DigestHasher<In, D>
+impl<D> Default for DigestHasher<D>
+    where D: EndianInput
+{
+    fn default() -> Self { Self::new() }
+}
+
+impl<D> Debug for DigestHasher<D>
     where D: EndianInput
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -43,7 +49,7 @@ impl<In: ?Sized, D> Debug for DigestHasher<In, D>
     }
 }
 
-impl<In: ?Sized, D> Hasher<In> for DigestHasher<In, D>
+impl<D, In: ?Sized> Hasher<In> for DigestHasher<D>
     where In: Hash,
           D: Default,
           D: EndianInput,
@@ -91,8 +97,8 @@ mod tests {
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
     #[test]
-    fn hasher_hash_input() {
-        let hasher = DigestHasher::<&'static [u8], BigEndian<Sha256>>::default();
+    fn hash_input() {
+        let hasher = DigestHasher::<BigEndian<Sha256>>::new();
         let hash = hasher.hash_input(&TEST_DATA);
         assert_eq!(hash, Sha256::digest(TEST_DATA));
     }
