@@ -10,13 +10,12 @@ use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-pub trait ExtractData {
-    type Input;
-    type Output;
-    fn extract_data(&self, input: Self::Input) -> Self::Output;
+pub trait ExtractData<In> {
+    type LeafData;
+    fn extract_data(&self, input: In) -> Self::LeafData;
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
 pub struct NoData<In> {
     phantom: PhantomData<In>
 }
@@ -27,13 +26,16 @@ impl<In> Debug for NoData<In> {
     }
 }
 
-impl<In> ExtractData for NoData<In> {
-    type Input = In;
-    type Output = ();
+impl<In> Default for NoData<In> {
+    fn default() -> Self { NoData { phantom: PhantomData } }
+}
+
+impl<In> ExtractData<In> for NoData<In> {
+    type LeafData = ();
     fn extract_data(&self, _: In) -> () { () }
 }
 
-#[derive(Copy, Clone, Default)]
+#[derive(Copy, Clone)]
 pub struct Owned<T> {
     phantom: PhantomData<T>
 }
@@ -44,9 +46,12 @@ impl<T> Debug for Owned<T> {
     }
 }
 
-impl<T> ExtractData for Owned<T> {
-    type Input = T;
-    type Output = T;
+impl<T> Default for Owned<T> {
+    fn default() -> Self { Owned { phantom: PhantomData } }
+}
+
+impl<T> ExtractData<T> for Owned<T> {
+    type LeafData = T;
     fn extract_data(&self, input: T) -> T { input }
 }
 
@@ -61,14 +66,21 @@ impl<In, F> Debug for ExtractFn<In, F> {
     }
 }
 
-impl<In, F, Out> ExtractData for ExtractFn<In, F>
+impl<In, F, Out> ExtractData<In> for ExtractFn<In, F>
     where F: Fn(In) -> Out
 {
-    type Input = In;
-    type Output = Out;
+    type LeafData = Out;
     fn extract_data(&self, input: In) -> Out {
         (self.extractor)(input)
     }
+}
+
+pub fn no_data<In>() -> NoData<In> {
+    NoData::default()
+}
+
+pub fn owned<In>() -> Owned<In> {
+    Owned::default()
 }
 
 pub fn extract_with<In, F, Out>(extractor: F) -> ExtractFn<In, F>

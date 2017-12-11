@@ -9,15 +9,12 @@
 use tree::Nodes;
 
 
-pub trait Hasher {
-    type Input;
+pub trait Hasher<In: ?Sized> {
     type HashOutput;
-    type LeafData;
 
-    fn hash_data(&self, input: Self::Input)
-                 -> (Self::HashOutput, Self::LeafData);
+    fn hash_input(&self, input: &In) -> Self::HashOutput;
 
-    fn hash_nodes<'a>(&'a self,
-                      iter: Nodes<'a, Self::HashOutput, Self::LeafData>)
-                      -> Self::HashOutput;
+    fn hash_nodes<'a, L>(&'a self,
+                         iter: Nodes<'a, Self::HashOutput, L>)
+                         -> Self::HashOutput;
 }

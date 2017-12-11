@@ -8,6 +8,7 @@
 
 use super::{MerkleTree, Node, HashNode, LeafNode, Nodes};
 use hash::Hasher;
+use leaf;
 
 use std::error::Error;
 use std::fmt;
@@ -15,41 +16,54 @@ use std::fmt::Display;
 
 
 #[derive(Debug)]
-pub struct Builder<H>
-    where H: Hasher
+pub struct Builder<In, D, L>
+    where D: Hasher<In>,
+          L: leaf::ExtractData<In>
 {
-    hasher: H,
-    nodes: Vec<Node<H::HashOutput, H::LeafData>>
+    hasher: D,
+    leaf_data_extractor: L,
+    nodes: Vec<Node<D::HashOutput, L::LeafData>>
 }
 
-impl<H> Builder<H>
-    where H: Hasher
+impl<In, D> Builder<In, D, leaf::NoData<In>>
+    where D: Hasher<In>
 {
-    pub fn new(hasher: H) -> Self {
+    pub fn new(hasher: D) -> Self {
+        Self::with_leaf_data(hasher, leaf::no_data())
+    }
+}
+
+impl<In, D, L> Builder<In, D, L>
+    where D: Hasher<In>,
+          L: leaf::ExtractData<In>
+{
+    pub fn with_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
         Builder {
             hasher,
+            leaf_data_extractor,
             // expecting two children per node
             nodes: Vec::with_capacity(2)
         }
     }
 
-    pub fn push_leaf(&mut self, input: H::Input) {
-        let (hash, data) = self.hasher.hash_data(input);
+    pub fn push_leaf(&mut self, input: In) {
+        let hash = self.hasher.hash_input(&input);
+        let data = self.leaf_data_extractor.extract_data(input);
         self.nodes.push(Node::Leaf(LeafNode { hash, data }));
     }
 
     pub fn push_tree(&mut self,
-                     tree: MerkleTree<H::HashOutput, H::LeafData>)
+                     tree: MerkleTree<D::HashOutput, L::LeafData>)
     {
         self.nodes.push(tree.root);
     }
 
-    fn nodes<'a>(&'a self) -> Nodes<'a, H::HashOutput, H::LeafData> {
+    fn nodes<'a>(&'a self) -> Nodes<'a, D::HashOutput, L::LeafData> {
         Nodes(self.nodes.iter())
     }
 
     pub fn complete(mut self)
-                    -> Result<MerkleTree<H::HashOutput, H::LeafData>,
+                    -> Result<MerkleTree<D::HashOutput, L::LeafData>,
                               EmptyTree>
     {
         match self.nodes.len() {
