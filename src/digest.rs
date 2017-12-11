@@ -13,7 +13,7 @@ pub extern crate digest_hash;
 
 use self::digest_hash::{Hash, Endian, EndianInput};
 use self::digest_hash::byteorder::ByteOrder;
-use self::digest_hash::digest::FixedOutput;
+use self::digest_hash::digest::{Input, FixedOutput};
 use self::digest_hash::digest::generic_array::GenericArray;
 
 use std::fmt;
@@ -23,45 +23,39 @@ use std::marker::PhantomData;
 
 #[derive(Clone)]
 pub struct DigestHasher<In: ?Sized, D, Bo> {
-    inner: Endian<D, Bo>,
-    phantom: PhantomData<In>
+    phantom: PhantomData<(*const In, Endian<D, Bo>)>
 }
 
-impl<In, D, Bo> Default for DigestHasher<In, D, Bo>
-    where In: ?Sized,
-          D: Default,
+impl<In: ?Sized, D, Bo> Default for DigestHasher<In, D, Bo>
+    where D: EndianInput,
           Bo: ByteOrder
 {
     fn default() -> Self {
-        DigestHasher { inner: Endian::default(), phantom: PhantomData }
+        DigestHasher { phantom: PhantomData }
     }
 }
 
-impl<In, D, Bo> Debug for DigestHasher<In, D, Bo>
-    where In: ?Sized,
-          D: Debug,
-          Bo: ByteOrder
+impl<In: ?Sized, D, Bo> Debug for DigestHasher<In, D, Bo>
+    where Bo: ByteOrder
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_tuple("DigestHasher")
-         .field(&self.inner)
+         .field(&Endian::<D, Bo>::byte_order_str())
          .finish()
     }
 }
 
-impl<In, D, Bo> Hasher<In> for DigestHasher<In, D, Bo>
+impl<In: ?Sized, D, Bo> Hasher<In> for DigestHasher<In, D, Bo>
     where In: Hash,
-          In: ?Sized,
           D: Default,
-          D: EndianInput,
+          D: Input,
           D: FixedOutput,
           Bo: ByteOrder
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
-    fn hash_input(&self, input: &In) -> Self::HashOutput
-    {
-        let mut digest = D::default();
+    fn hash_input(&self, input: &In) -> Self::HashOutput {
+        let mut digest = Endian::<D, Bo>::default();
         input.hash(&mut digest);
         digest.fixed_result()
     }
