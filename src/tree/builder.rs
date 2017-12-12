@@ -148,8 +148,10 @@ mod tests {
 
     #[test]
     fn builder_no_data_fixed_chunks() {
-        let mut builder = Builder::<MockHasher, _, _>::new();
-        builder.push_leaf([0u8; CHUNK_SIZE]);
+        let mut builder = Builder::<MockHasher, leaf::NoData, _>::new();
+        builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
+        let tree = builder.complete().unwrap();
+        assert_eq!(tree.root().hash_bytes(), &[1, 2, 3, 4]);
     }
 
     #[test]
@@ -157,6 +159,13 @@ mod tests {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::owned());
-        builder.push_leaf([0u8; CHUNK_SIZE]);
+        builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
+        let tree = builder.complete().unwrap();
+        if let Node::Leaf(ref ln) = *tree.root() {
+            assert_eq!(ln.hash_bytes(), &[1, 2, 3, 4]);
+            assert_eq!(ln.data(), &[1, 2, 3, 4]);
+        } else {
+            unreachable!()
+        }
     }
 }
