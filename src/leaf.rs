@@ -43,7 +43,6 @@ impl<T> ExtractData<T> for Owned<T> {
     fn extract_data(&self, input: T) -> T { input }
 }
 
-#[derive(Clone)]
 pub struct ExtractFn<In, F> {
     extractor: F,
     phantom: PhantomData<In>
@@ -52,6 +51,14 @@ pub struct ExtractFn<In, F> {
 impl<In, F> Debug for ExtractFn<In, F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.write_str("ExtractFn")
+    }
+}
+
+impl<In, F, Out> ExtractFn<In, F>
+    where F: Fn(In) -> Out
+{
+    pub fn with(extractor: F) -> Self {
+        ExtractFn { extractor, phantom: PhantomData }
     }
 }
 
@@ -64,13 +71,20 @@ impl<In, F, Out> ExtractData<In> for ExtractFn<In, F>
     }
 }
 
+impl<In, Out> ExtractData<In> for fn(In) -> Out {
+    type LeafData = Out;
+    fn extract_data(&self, input: In) -> Out {
+        self(input)
+    }
+}
+
 pub fn owned<In>() -> Owned<In> {
     Owned::default()
 }
 
 pub fn extract_with<In, Out>(extractor: fn(In) -> Out)
-                             -> ExtractFn<In, fn(In) -> Out> {
-    ExtractFn { extractor, phantom: PhantomData }
+                             -> fn(In) -> Out {
+    extractor
 }
 
 #[cfg(test)]
@@ -93,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn clone_extract_fn() {
+    fn result_of_extract_with_is_cloneable() {
         let _capture = NonCloneable;
         let extractor = extract_with(
             |s: &'static [u8]| {

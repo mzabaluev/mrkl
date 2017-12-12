@@ -231,7 +231,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_leaf_data_extract_with() {
+    fn builder_leaf_data_extract_with_plain_fn() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: [u8; 4]| { s.len() }));
@@ -240,6 +240,23 @@ mod tests {
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
             assert_eq!(*ln.data(), 4);
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn builder_leaf_data_extract_with_closure() {
+        let hasher = MockHasher::default();
+        let off = 42;
+        let mut builder = Builder::from_hasher_leaf_data(
+                hasher,
+                leaf::ExtractFn::with(|s: [u8; 4]| { s.len() + off }));
+        builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
+        let tree = builder.complete().unwrap();
+        if let Node::Leaf(ref ln) = *tree.root() {
+            assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
+            assert_eq!(*ln.data(), 46);
         } else {
             unreachable!()
         }
