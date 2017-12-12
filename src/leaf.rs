@@ -68,8 +68,7 @@ pub fn owned<In>() -> Owned<In> {
     Owned::default()
 }
 
-pub fn extract_with<In, F, Out>(extractor: F) -> ExtractFn<In, F>
-    where F: Fn(In) -> Out
-{
+pub fn extract_with<In, Out>(extractor: fn(In) -> Out)
+                             -> ExtractFn<In, fn(In) -> Out> {
     ExtractFn { extractor, phantom: PhantomData }
 }
