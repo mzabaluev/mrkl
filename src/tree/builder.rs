@@ -25,11 +25,12 @@ pub struct Builder<In, D, L>
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
 }
 
-impl<In, D> Builder<In, D, leaf::NoData<In>>
-    where D: Hasher<In>
+impl<In, D> Builder<In, D, leaf::NoData>
+    where D: Hasher<In>,
+          D: Default
 {
-    pub fn new(hasher: D) -> Self {
-        Self::with_leaf_data(hasher, leaf::no_data())
+    pub fn new() -> Self {
+        Self::from_hasher_leaf_data(D::default(), leaf::NoData)
     }
 }
 
@@ -37,7 +38,7 @@ impl<In, D, L> Builder<In, D, L>
     where D: Hasher<In>,
           L: leaf::ExtractData<In>
 {
-    pub fn with_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
+    pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
         Builder {
             hasher,
             leaf_data_extractor,

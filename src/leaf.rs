@@ -15,22 +15,10 @@ pub trait ExtractData<In> {
     fn extract_data(&self, input: In) -> Self::LeafData;
 }
 
-#[derive(Copy, Clone)]
-pub struct NoData<In> {
-    phantom: PhantomData<In>
-}
+#[derive(Copy, Clone, Debug, Default)]
+pub struct NoData;
 
-impl<In> Debug for NoData<In> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str("NoData")
-    }
-}
-
-impl<In> Default for NoData<In> {
-    fn default() -> Self { NoData { phantom: PhantomData } }
-}
-
-impl<In> ExtractData<In> for NoData<In> {
+impl<In: Sized> ExtractData<In> for NoData {
     type LeafData = ();
     fn extract_data(&self, _: In) -> () { () }
 }
@@ -73,10 +61,6 @@ impl<In, F, Out> ExtractData<In> for ExtractFn<In, F>
     fn extract_data(&self, input: In) -> Out {
         (self.extractor)(input)
     }
-}
-
-pub fn no_data<In>() -> NoData<In> {
-    NoData::default()
 }
 
 pub fn owned<In>() -> Owned<In> {
