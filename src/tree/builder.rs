@@ -206,4 +206,62 @@ mod tests {
         let tree = builder.complete().unwrap();
         assert_eq!(tree.root().hash_bytes(), TEST_DATA);
     }
+
+    #[test]
+    fn two_leaves_make_a_tree() {
+        let hasher = MockHasher::default();
+        let mut builder = Builder::from_hasher_leaf_data(
+                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
+        builder.push_leaf("eats shoots");
+        builder.push_leaf("and leaves");
+        let tree = builder.complete().unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(), b"Leats shootsLand leaves");
+            assert_eq!(hn.child_count(), 2);
+            let child = hn.child_at(0);
+            if let Node::Leaf(ref ln) = *child {
+                assert_eq!(ln.hash_bytes(), b"eats shoots");
+                assert_eq!(ln.data(), "eats shoots");
+            } else {
+                unreachable!()
+            }
+            let child = hn.child_at(1);
+            if let Node::Leaf(ref ln) = *child {
+                assert_eq!(ln.hash_bytes(), b"and leaves");
+                assert_eq!(ln.data(), "and leaves");
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn three_leaves_make_a_ternary_tree() {
+        const TEST_STRS: [&'static str; 3] = [
+            "Panda eats,",
+            "shoots,",
+            "and leaves"];
+        let hasher = MockHasher::default();
+        let mut builder = Builder::from_hasher_leaf_data(
+                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
+        for s in TEST_STRS.iter() {
+            builder.push_leaf(s);
+        }
+        let tree = builder.complete().unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(), b"LPanda eats,Lshoots,Land leaves");
+            for (i, child) in hn.children().enumerate() {
+                if let Node::Leaf(ref ln) = *child {
+                    assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
+                    assert_eq!(ln.data(), TEST_STRS[i]);
+                } else {
+                    unreachable!()
+                }
+            }
+        } else {
+            unreachable!()
+        }
+    }
 }
