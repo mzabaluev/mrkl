@@ -116,13 +116,11 @@ mod tests {
         }
     }
 
-    const CHUNK_SIZE: usize = 4;
-
-    impl Hasher<[u8; CHUNK_SIZE]> for MockHasher {
+    impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
         type HashOutput = Vec<u8>;
 
-        fn hash_input(&self, input: &[u8; CHUNK_SIZE]) -> Vec<u8> {
-            input.to_vec()
+        fn hash_input(&self, input: &In) -> Vec<u8> {
+            input.as_ref().to_vec()
         }
 
         fn hash_nodes<'a, L>(&'a self,
@@ -147,7 +145,7 @@ mod tests {
     }
 
     #[test]
-    fn builder_no_data_fixed_chunks() {
+    fn builder_no_data_fixed_size_array() {
         let mut builder = Builder::<MockHasher, leaf::NoData, _>::new();
         builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
         let tree = builder.complete().unwrap();
@@ -167,5 +165,14 @@ mod tests {
         } else {
             unreachable!()
         }
+    }
+
+    #[test]
+    fn builder_over_nonstatic_slice() {
+        let v = Vec::from(TEST_DATA);
+        let mut builder = Builder::<MockHasher, _, &[u8]>::new();
+        builder.push_leaf(&v[..]);
+        let tree = builder.complete().unwrap();
+        assert_eq!(tree.root().hash_bytes(), TEST_DATA);
     }
 }
