@@ -13,6 +13,7 @@ use leaf;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Display;
+use std::iter::IntoIterator;
 
 
 #[derive(Debug)]
@@ -77,6 +78,60 @@ impl<D, L, In> Builder<D, L, In>
                 let hash = self.hasher.hash_nodes(self.nodes());
                 let node = HashNode { hash, children: self.nodes.into() };
                 Ok(MerkleTree { root: Node::Hash(node) })
+            }
+        }
+    }
+}
+
+impl<D, L, In> Builder<D, L, In>
+    where D: Hasher<In> + Clone,
+          L: leaf::ExtractData<In> + Clone
+{
+    pub fn build_balanced_from<I>(mut self, iterable: I)
+                -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+        where I: IntoIterator<Item = In>,
+              I::IntoIter: ExactSizeIterator
+    {
+        assert!(self.nodes.is_empty(),
+                "build_balanced_from() called on a populated Builder");
+        let mut iter = iterable.into_iter();
+        let len = iter.len();
+        if len == 0 {
+            return Err(EmptyTree);
+        }
+        self.populate_balanced_from_iter(&mut iter, len);
+        debug_assert!(iter.next().is_none(),
+                      "iterator has not been exhausted after reported length");
+        self.complete()
+    }
+
+    fn populate_balanced_from_iter<I>(&mut self, iter: &mut I, len: usize)
+        where I: Iterator<Item = In>
+    {
+        debug_assert!(len != 0);
+        if len == 1 {
+            let item = iter.next()
+                       .expect("iterator returned None \
+                                before its reported length was reached");
+            self.push_leaf(item);
+        } else {
+            let left_len = len.saturating_add(1) / 2;
+            {
+                let mut builder = Builder::from_hasher_leaf_data(
+                            self.hasher.clone(),
+                            self.leaf_data_extractor.clone());
+                builder.populate_balanced_from_iter(iter, left_len);
+                let left_tree = builder.complete().unwrap();
+                self.push_tree(left_tree);
+            }
+            let right_len = len - left_len;
+            {
+                let mut builder = Builder::from_hasher_leaf_data(
+                            self.hasher.clone(),
+                            self.leaf_data_extractor.clone());
+                builder.populate_balanced_from_iter(iter, right_len);
+                let right_tree = builder.complete().unwrap();
+                self.push_tree(right_tree);
             }
         }
     }
@@ -184,10 +239,10 @@ mod tests {
     }
 
     #[test]
-    fn builder_leaf_data_extract_with_closure() {
+    fn builder_leaf_data_extract_with() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, |s: [u8; 4]| { s.len() });
+                hasher, leaf::extract_with(|s: [u8; 4]| { s.len() }));
         builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
         let tree = builder.complete().unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
@@ -211,7 +266,7 @@ mod tests {
     fn two_leaves_make_a_tree() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, |s: &str| { s.to_string() });
+                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
         builder.push_leaf("eats shoots");
         builder.push_leaf("and leaves");
         let tree = builder.complete().unwrap();
@@ -245,7 +300,7 @@ mod tests {
             "and leaves"];
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, |s: &str| { s.to_string() });
+                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
         for s in TEST_STRS.iter() {
             builder.push_leaf(s);
         }
@@ -270,12 +325,14 @@ mod tests {
         fn leaf_extractor(s: &str) -> String { s.to_string() }
 
         let mut builder = Builder::from_hasher_leaf_data(
-                MockHasher::default(), leaf_extractor);
+                MockHasher::default(),
+                leaf::extract_with(leaf_extractor));
         builder.push_leaf("shoots,");
         builder.push_leaf("and leaves");
         let subtree = builder.complete().unwrap();
         let mut builder = Builder::from_hasher_leaf_data(
-                MockHasher::default(), leaf_extractor);
+                MockHasher::default(),
+                leaf::extract_with(leaf_extractor));
         builder.push_leaf("Panda eats,");
         builder.push_tree(subtree);
         let tree = builder.complete().unwrap();
@@ -308,6 +365,25 @@ mod tests {
             } else {
                 unreachable!()
             }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn build_balanced_from_empty() {
+        use std::iter::empty;
+        let builder = Builder::<MockHasher, _, _>::new();
+        builder.build_balanced_from(empty::<[u8; 1]>()).unwrap_err();
+    }
+
+    #[test]
+    fn build_balanced_no_data() {
+        let builder = Builder::<MockHasher, leaf::NoData, _>::new();
+        let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(),
+                       &b"HLThe quick brownL fox jumps overL the lazy dog"[..]);
         } else {
             unreachable!()
         }
