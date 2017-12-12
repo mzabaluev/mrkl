@@ -43,32 +43,15 @@ impl<T> ExtractData<T> for Owned<T> {
     fn extract_data(&self, input: T) -> T { input }
 }
 
-pub struct ExtractFn<In, F> {
-    extractor: F,
-    phantom: PhantomData<In>
-}
-
-impl<In, F> Debug for ExtractFn<In, F> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.write_str("ExtractFn")
-    }
-}
-
-impl<In, F, Out> ExtractData<In> for ExtractFn<In, F>
-    where F: Fn(In) -> Out
-{
-    type LeafData = Out;
-    fn extract_data(&self, input: In) -> Out {
-        (self.extractor)(input)
-    }
-}
-
 pub fn owned<In>() -> Owned<In> {
     Owned::default()
 }
 
-pub fn extract_with<In, F, Out>(extractor: F) -> ExtractFn<In, F>
+impl<In, F, Out> ExtractData<In> for F
     where F: Fn(In) -> Out
 {
-    ExtractFn { extractor, phantom: PhantomData }
+    type LeafData = Out;
+    fn extract_data(&self, input: In) -> Out {
+        self(input)
+    }
 }

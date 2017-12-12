@@ -184,10 +184,10 @@ mod tests {
     }
 
     #[test]
-    fn builder_leaf_data_extract_with() {
+    fn builder_leaf_data_extract_with_closure() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, leaf::extract_with(|s: [u8; 4]| { s.len() }));
+                hasher, |s: [u8; 4]| { s.len() });
         builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
         let tree = builder.complete().unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
@@ -211,7 +211,7 @@ mod tests {
     fn two_leaves_make_a_tree() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
+                hasher, |s: &str| { s.to_string() });
         builder.push_leaf("eats shoots");
         builder.push_leaf("and leaves");
         let tree = builder.complete().unwrap();
@@ -245,7 +245,7 @@ mod tests {
             "and leaves"];
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, leaf::extract_with(|s: &str| { s.to_string() }));
+                hasher, |s: &str| { s.to_string() });
         for s in TEST_STRS.iter() {
             builder.push_leaf(s);
         }
