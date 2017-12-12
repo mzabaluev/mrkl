@@ -6,6 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! A generic, minimalist Merkle tree.
+//!
+//! An implementation of Merkle tree that is generic over the hashed input
+//! data, the hash function, and what gets into leaf data.
+//!
+//! Optional support is provided for the cryptographic hash functions
+//! that conform to the API defined in crate `digest`.
+
 pub mod hash;
 pub mod leaf;
 pub mod tree;
