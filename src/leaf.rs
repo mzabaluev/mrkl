@@ -72,3 +72,35 @@ pub fn extract_with<In, Out>(extractor: fn(In) -> Out)
                              -> ExtractFn<In, fn(In) -> Out> {
     ExtractFn { extractor, phantom: PhantomData }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{NoData, owned, extract_with};
+
+    #[derive(Debug)]
+    struct NonCloneable;
+
+    #[test]
+    fn no_data_is_cloneable() {
+        let extractor = NoData;
+        let _ = extractor.clone();
+    }
+
+    #[test]
+    fn owned_is_always_cloneable() {
+        let extractor = owned::<NonCloneable>;
+        let _ = extractor.clone();
+    }
+
+    #[test]
+    fn clone_extract_fn() {
+        let _capture = NonCloneable;
+        let extractor = extract_with(
+            |s: &'static [u8]| {
+                // This breaks the test:
+                //let _ = format!("{:?}", _capture);
+                s.len()
+            });
+        let _ = extractor.clone();
+    }
+}
