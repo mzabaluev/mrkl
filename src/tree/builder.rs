@@ -101,7 +101,7 @@ mod tests {
 
     use hash::Hasher;
     use leaf;
-    use tree::{Nodes, Node};
+    use tree::{MerkleTree, EmptyTree, Nodes, Node};
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
@@ -142,6 +142,22 @@ mod tests {
             }
             dump
         }
+    }
+
+    #[test]
+    fn empty_tree() {
+        use std::error::Error;
+
+        fn daft() -> Result<MerkleTree<Vec<u8>, ()>, EmptyTree> {
+            let builder = Builder::<MockHasher, _, String>::new();
+            let _ = builder.complete()?;
+            unreachable!()
+        }
+
+        let err = daft().unwrap_err();
+        assert_eq!(err.description(), "empty Merkle tree");
+        println!("{}", err);
+        println!("{:?}", err);
     }
 
     #[test]
