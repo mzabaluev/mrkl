@@ -94,3 +94,69 @@ impl Display for EmptyTree {
 impl Error for EmptyTree {
     fn description(&self) -> &str { "empty Merkle tree" }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Builder;
+
+    use hash::Hasher;
+    use leaf;
+    use tree::{Nodes, Node};
+
+    const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
+
+    #[derive(Debug)]
+    struct MockHasher {
+        bytes: Vec<u8>
+    }
+
+    impl Default for MockHasher {
+        fn default() -> Self {
+            MockHasher { bytes: Vec::new() }
+        }
+    }
+
+    const CHUNK_SIZE: usize = 4;
+
+    impl Hasher<[u8; CHUNK_SIZE]> for MockHasher {
+        type HashOutput = Vec<u8>;
+
+        fn hash_input(&self, input: &[u8; CHUNK_SIZE]) -> Vec<u8> {
+            input.to_vec()
+        }
+
+        fn hash_nodes<'a, L>(&'a self,
+                             iter: Nodes<'a, Vec<u8>, L>)
+                             -> Vec<u8>
+        {
+            let mut dump = Vec::new();
+            for node in iter {
+                match *node {
+                    Node::Leaf(ref ln) => {
+                        dump.push(b'L');
+                        dump.extend(ln.hash_bytes());
+                    }
+                    Node::Hash(ref hn) => {
+                        dump.push(b'H');
+                        dump.extend(hn.hash_bytes());
+                    }
+                }
+            }
+            dump
+        }
+    }
+
+    #[test]
+    fn builder_no_data_fixed_chunks() {
+        let _builder =
+            Builder::<[u8; CHUNK_SIZE], MockHasher, _>::new();
+    }
+
+    #[test]
+    fn builder_with_owned_leaves() {
+        let hasher = MockHasher::default();
+        let _builder =
+            Builder::<[u8; CHUNK_SIZE], _, _>::from_hasher_leaf_data(
+                hasher, leaf::owned());
+    }
+}
