@@ -177,12 +177,13 @@ mod tests {
             for node in iter {
                 match *node {
                     Node::Leaf(ref ln) => {
-                        dump.push(b'L');
+                        dump.push(b'>');
                         dump.extend(ln.hash_bytes());
                     }
                     Node::Hash(ref hn) => {
-                        dump.push(b'H');
+                        dump.extend(b"#(");
                         dump.extend(hn.hash_bytes());
+                        dump.extend(b")");
                     }
                 }
             }
@@ -262,7 +263,7 @@ mod tests {
         builder.push_leaf("and leaves");
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
-            assert_eq!(hn.hash_bytes(), b"Leats shootsLand leaves");
+            assert_eq!(hn.hash_bytes(), b">eats shoots>and leaves");
             assert_eq!(hn.child_count(), 2);
             let child = hn.child_at(0);
             if let Node::Leaf(ref ln) = *child {
@@ -288,7 +289,7 @@ mod tests {
         const TEST_STRS: [&'static str; 3] = [
             "Panda eats,",
             "shoots,",
-            "and leaves"];
+            "and leaves."];
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: &str| { s.to_string() }));
@@ -297,7 +298,7 @@ mod tests {
         }
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
-            assert_eq!(hn.hash_bytes(), b"LPanda eats,Lshoots,Land leaves");
+            assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
             for (i, child) in hn.children().enumerate() {
                 if let Node::Leaf(ref ln) = *child {
                     assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
@@ -319,7 +320,7 @@ mod tests {
                 MockHasher::default(),
                 leaf::extract_with(leaf_extractor));
         builder.push_leaf("shoots,");
-        builder.push_leaf("and leaves");
+        builder.push_leaf("and leaves.");
         let subtree = builder.complete().unwrap();
         let mut builder = Builder::from_hasher_leaf_data(
                 MockHasher::default(),
@@ -328,7 +329,8 @@ mod tests {
         builder.push_tree(subtree);
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
-            assert_eq!(hn.hash_bytes(), b"LPanda eats,HLshoots,Land leaves");
+            let expected: &[u8] = b">Panda eats,#(>shoots,>and leaves.)";
+            assert_eq!(hn.hash_bytes(), expected);
             let child = hn.child_at(0);
             if let Node::Leaf(ref ln) = *child {
                 assert_eq!(ln.hash_bytes(), b"Panda eats,");
@@ -338,7 +340,7 @@ mod tests {
             }
             let child = hn.child_at(1);
             if let Node::Hash(ref hn) = *child {
-                assert_eq!(hn.hash_bytes(), b"Lshoots,Land leaves");
+                assert_eq!(hn.hash_bytes(), b">shoots,>and leaves.");
                 let child = hn.child_at(0);
                 if let Node::Leaf(ref ln) = *child {
                     assert_eq!(ln.hash_bytes(), b"shoots,");
@@ -348,8 +350,8 @@ mod tests {
                 }
                 let child = hn.child_at(1);
                 if let Node::Leaf(ref ln) = *child {
-                    assert_eq!(ln.hash_bytes(), b"and leaves");
-                    assert_eq!(ln.data(), "and leaves");
+                    assert_eq!(ln.hash_bytes(), b"and leaves.");
+                    assert_eq!(ln.data(), "and leaves.");
                 } else {
                     unreachable!()
                 }
@@ -373,8 +375,9 @@ mod tests {
         let builder = Builder::<MockHasher, leaf::NoData, _>::new();
         let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
-            assert_eq!(hn.hash_bytes(),
-                       &b"HLThe quick brownL fox jumps overL the lazy dog"[..]);
+            let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
+                                    > the lazy dog";
+            assert_eq!(hn.hash_bytes(), expected);
         } else {
             unreachable!()
         }
