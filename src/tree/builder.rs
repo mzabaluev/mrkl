@@ -264,7 +264,6 @@ mod tests {
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">eats shoots>and leaves");
-            assert_eq!(hn.child_count(), 2);
             let child = hn.child_at(0);
             if let Node::Leaf(ref ln) = *child {
                 assert_eq!(ln.hash_bytes(), b"eats shoots");
@@ -279,6 +278,22 @@ mod tests {
             } else {
                 unreachable!()
             }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn child_out_of_range() {
+        let hasher = MockHasher::default();
+        let mut builder = Builder::from_hasher_leaf_data(
+                hasher, leaf::NoData);
+        builder.push_leaf("eats shoots");
+        builder.push_leaf("and leaves");
+        let tree = builder.complete().unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let _child = hn.child_at(2);
         } else {
             unreachable!()
         }

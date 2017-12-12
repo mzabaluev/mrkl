@@ -65,8 +65,6 @@ impl<H: AsRef<[u8]>, T> HashNode<H, T> {
 
 impl<H, T> HashNode<H, T> {
 
-    pub fn child_count(&self) -> usize { self.children.len() }
-
     pub fn child_at(&self, index: usize) -> &Node<H, T> {
         &self.children[index]
     }
