@@ -65,8 +65,7 @@ impl<D, L, In> Builder<D, L, In>
     }
 
     pub fn complete(mut self)
-                    -> Result<MerkleTree<D::HashOutput, L::LeafData>,
-                              EmptyTree>
+                -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
     {
         match self.nodes.len() {
             0 => Err(EmptyTree),
@@ -160,16 +159,8 @@ mod tests {
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
-    #[derive(Debug)]
-    struct MockHasher {
-        bytes: Vec<u8>
-    }
-
-    impl Default for MockHasher {
-        fn default() -> Self {
-            MockHasher { bytes: Vec::new() }
-        }
-    }
+    #[derive(Clone, Debug, Default)]
+    struct MockHasher;
 
     impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
         type HashOutput = Vec<u8>;

@@ -18,7 +18,7 @@ pub trait ExtractData<In> {
 #[derive(Copy, Clone, Debug, Default)]
 pub struct NoData;
 
-impl<In: Sized> ExtractData<In> for NoData {
+impl<In> ExtractData<In> for NoData {
     type LeafData = ();
     fn extract_data(&self, _: In) -> () { () }
 }
