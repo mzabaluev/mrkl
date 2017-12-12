@@ -264,4 +264,52 @@ mod tests {
             unreachable!()
         }
     }
+
+    #[test]
+    fn stack_builders_for_multilevel_tree() {
+        fn leaf_extractor(s: &str) -> String { s.to_string() }
+
+        let mut builder = Builder::from_hasher_leaf_data(
+                MockHasher::default(), leaf_extractor);
+        builder.push_leaf("shoots,");
+        builder.push_leaf("and leaves");
+        let subtree = builder.complete().unwrap();
+        let mut builder = Builder::from_hasher_leaf_data(
+                MockHasher::default(), leaf_extractor);
+        builder.push_leaf("Panda eats,");
+        builder.push_tree(subtree);
+        let tree = builder.complete().unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(), b"LPanda eats,HLshoots,Land leaves");
+            let child = hn.child_at(0);
+            if let Node::Leaf(ref ln) = *child {
+                assert_eq!(ln.hash_bytes(), b"Panda eats,");
+                assert_eq!(ln.data(), "Panda eats,");
+            } else {
+                unreachable!()
+            }
+            let child = hn.child_at(1);
+            if let Node::Hash(ref hn) = *child {
+                assert_eq!(hn.hash_bytes(), b"Lshoots,Land leaves");
+                let child = hn.child_at(0);
+                if let Node::Leaf(ref ln) = *child {
+                    assert_eq!(ln.hash_bytes(), b"shoots,");
+                    assert_eq!(ln.data(), "shoots,");
+                } else {
+                    unreachable!()
+                }
+                let child = hn.child_at(1);
+                if let Node::Leaf(ref ln) = *child {
+                    assert_eq!(ln.hash_bytes(), b"and leaves");
+                    assert_eq!(ln.data(), "and leaves");
+                } else {
+                    unreachable!()
+                }
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
 }
