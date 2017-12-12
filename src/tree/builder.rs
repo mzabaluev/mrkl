@@ -403,13 +403,56 @@ mod tests {
     }
 
     #[test]
-    fn build_balanced_no_data() {
+    fn build_balanced_no_leaf_data() {
         let builder = Builder::<MockHasher, leaf::NoData, _>::new();
         let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";
             assert_eq!(hn.hash_bytes(), expected);
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn build_balanced_owned_leaf_data() {
+        let builder = Builder::from_hasher_leaf_data(
+                MockHasher::default(),
+                leaf::owned::<Vec<u8>>());
+        let iter = TEST_DATA.chunks(15).map(|s| { s.to_vec() });
+        let tree = builder.build_balanced_from(iter).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
+                                    > the lazy dog";
+            assert_eq!(hn.hash_bytes(), expected);
+            if let Node::Leaf(ref ln) = *hn.child_at(1) {
+                assert_eq!(ln.hash_bytes(), b" the lazy dog");
+                assert_eq!(ln.data(), b" the lazy dog");
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn build_balanced_leaf_data_extract_with() {
+        let builder = Builder::from_hasher_leaf_data(
+                MockHasher::default(),
+                leaf::extract_with(|s: &[u8]| { s[1] }));
+        let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
+                                    > the lazy dog";
+            assert_eq!(hn.hash_bytes(), expected);
+            if let Node::Leaf(ref ln) = *hn.child_at(1) {
+                assert_eq!(ln.hash_bytes(), b" the lazy dog");
+                assert_eq!(*ln.data(), b't');
+            } else {
+                unreachable!()
+            }
         } else {
             unreachable!()
         }
