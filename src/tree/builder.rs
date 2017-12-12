@@ -403,6 +403,14 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn build_balanced_on_populated_builder() {
+        let mut builder = Builder::<MockHasher, leaf::NoData, &[u8]>::new();
+        builder.push_leaf(&[0u8]);
+        let _ = builder.build_balanced_from(TEST_DATA.chunks(1));
+    }
+
+    #[test]
     fn build_balanced_no_leaf_data() {
         let builder = Builder::<MockHasher, leaf::NoData, _>::new();
         let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
