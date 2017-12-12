@@ -16,7 +16,7 @@ use std::fmt::Display;
 
 
 #[derive(Debug)]
-pub struct Builder<In, D, L>
+pub struct Builder<D, L, In>
     where D: Hasher<In>,
           L: leaf::ExtractData<In>
 {
@@ -25,7 +25,7 @@ pub struct Builder<In, D, L>
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
 }
 
-impl<In, D> Builder<In, D, leaf::NoData>
+impl<D, In> Builder<D, leaf::NoData, In>
     where D: Hasher<In>,
           D: Default
 {
@@ -34,7 +34,7 @@ impl<In, D> Builder<In, D, leaf::NoData>
     }
 }
 
-impl<In, D, L> Builder<In, D, L>
+impl<D, L, In> Builder<D, L, In>
     where D: Hasher<In>,
           L: leaf::ExtractData<In>
 {
@@ -148,15 +148,15 @@ mod tests {
 
     #[test]
     fn builder_no_data_fixed_chunks() {
-        let _builder =
-            Builder::<[u8; CHUNK_SIZE], MockHasher, _>::new();
+        let mut builder = Builder::<MockHasher, _, _>::new();
+        builder.push_leaf([0u8; CHUNK_SIZE]);
     }
 
     #[test]
     fn builder_with_owned_leaves() {
         let hasher = MockHasher::default();
-        let _builder =
-            Builder::<[u8; CHUNK_SIZE], _, _>::from_hasher_leaf_data(
+        let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::owned());
+        builder.push_leaf([0u8; CHUNK_SIZE]);
     }
 }
