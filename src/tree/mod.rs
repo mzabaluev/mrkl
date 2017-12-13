@@ -149,6 +149,14 @@ impl<H, T> HashNode<H, T> {
     pub fn children<'a>(&'a self) -> Children<'a, H, T> {
         Children(self.children.iter())
     }
+
+    pub fn child_hashes<'a>(&'a self) -> NodeHashes<'a, H> {
+        NodeHashes {
+            nodes: &self.children[..],
+            pos: 0,
+            len: self.children.len()
+        }
+    }
 }
 
 // NOTE: The PartialEq, Eq, and Hash implementations assume that the hashing
@@ -313,4 +321,95 @@ impl<'a, H, T> ExactSizeIterator for Children<'a, H, T> {
 
 impl<'a, H, T> DoubleEndedIterator for Children<'a, H, T> {
     fn next_back(&mut self) -> Option<Self::Item> { self.0.next_back() }
+}
+
+// An internal helper trait that provides dynamic dispatch to iterate
+// over nodes' hashes while not encoding leaf data as the object type's
+// parameter.
+trait DynHashSlice<H> {
+    fn len(&self) -> usize;
+    fn hash_at(&self, index: usize) -> &H;
+}
+
+impl<'a, H, T> DynHashSlice<H> for [Node<H, T>] {
+    fn len(&self) -> usize { (*self).len() }
+
+    fn hash_at(&self, index: usize) -> &H {
+        self[index].hash()
+    }
+}
+
+#[derive(Clone)]
+pub struct NodeHashes<'a, H: 'a> {
+    nodes: &'a DynHashSlice<H>,
+    pos: usize,
+    len: usize
+}
+
+impl<'a, H> Debug for NodeHashes<'a, H> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("NodeHashes")
+         .field("pos", &self.pos)
+         .field("len", &self.len)
+         .finish()
+    }
+}
+
+impl<'a, H> Iterator for NodeHashes<'a, H> {
+    type Item = &'a H;
+
+    fn next(&mut self) -> Option<&'a H> {
+        if self.pos == self.len {
+            None
+        } else {
+            debug_assert!(self.pos <= self.len);
+            let i = self.pos;
+            self.pos += 1;
+            Some(self.nodes.hash_at(i))
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining_len = self.len - self.pos;
+        (remaining_len, Some(remaining_len))
+    }
+
+    fn count(self) -> usize { self.len - self.pos }
+
+    fn nth(&mut self, n: usize) -> Option<&'a H> {
+        if n >= self.len - self.pos {
+            None
+        } else {
+            // self.pos can't overflow because it's not greater
+            // than a memory sized container length
+            let i = self.pos + n;
+            self.pos = i + 1;
+            Some(self.nodes.hash_at(i))
+        }
+    }
+
+    fn last(self) -> Option<&'a H> {
+        debug_assert!(self.pos <= self.len);
+        if self.pos == self.len {
+            // This includes check for self.len == 0
+            None
+        } else {
+            Some(self.nodes.hash_at(self.len - 1))
+        }
+    }
+}
+
+impl<'a, H> ExactSizeIterator for NodeHashes<'a, H> {
+    fn len(&self) -> usize { self.len }
+}
+
+impl<'a, H> DoubleEndedIterator for NodeHashes<'a, H> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.pos == 0 {
+            None
+        } else {
+            self.pos -= 1;
+            Some(self.nodes.hash_at(self.pos))
+        }
+    }
 }
