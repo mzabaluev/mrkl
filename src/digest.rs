@@ -136,10 +136,10 @@ where D: Default,
 /// for hashing Merkle trees with byte slice convertible input.
 ///
 /// The hash function implementation is defined by the type parameter.
-/// In contrast to the more generic `DigestHasher`, that type is bound
-/// by `digest::Input`, so any cryptographic digest function implementations
-/// implementing this trait, plus `digest::FixedOutput` and `Default`,
-/// are directly usable.
+/// In contrast to the more generic `DigestHasher`, the parameter type is
+/// bound by byte-oriented `digest::Input`, so any cryptographic digest
+/// function implementations implementing this trait, plus
+/// `digest::FixedOutput` and `Default`, are directly usable.
 ///
 #[derive(Clone)]
 pub struct ByteDigestHasher<D> {
