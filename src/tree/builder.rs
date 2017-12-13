@@ -18,7 +18,7 @@ use std::iter::IntoIterator;
 
 /// The facility to construct Merkle trees with.
 ///
-/// A mutable `Builder` instance can be used to construct a complete Merkle
+/// Mutable `Builder` instances can be used to construct a complete Merkle
 /// tree. There are two ways of construction: incremental by using `Builder`
 /// instances to construct and compose trees, or by using the convenience
 /// method `build_balanced_from()` to create a balanced binary tree out of a
@@ -119,6 +119,21 @@ impl<D, L, In> Builder<D, L, In>
                      tree: MerkleTree<D::HashOutput, L::LeafData>)
     {
         self.nodes.push(tree.root);
+    }
+
+    /// Appends leaf nodes with input data retrieved from an iterable.
+    pub fn extend_leaves<I>(&mut self, iter: I)
+    where I: IntoIterator<Item = In> {
+        self.extend_leaves_impl(iter.into_iter())
+    }
+
+    fn extend_leaves_impl<I>(&mut self, iter: I)
+    where I: Iterator<Item = In> {
+        let (size_low, _) = iter.size_hint();
+        self.nodes.reserve(size_low);
+        for input in iter {
+            self.push_leaf(input);
+        }
     }
 
     fn nodes<'a>(&'a self) -> Nodes<'a, D::HashOutput, L::LeafData> {
@@ -451,12 +466,13 @@ mod tests {
         }
     }
 
+    const TEST_STRS: [&'static str; 3] = [
+        "Panda eats,",
+        "shoots,",
+        "and leaves."];
+
     #[test]
     fn three_leaves_make_a_ternary_tree() {
-        const TEST_STRS: [&'static str; 3] = [
-            "Panda eats,",
-            "shoots,",
-            "and leaves."];
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: &str| { s.to_string() }));
@@ -470,6 +486,25 @@ mod tests {
                 if let Node::Leaf(ref ln) = *child {
                     assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
                     assert_eq!(ln.data(), TEST_STRS[i]);
+                } else {
+                    unreachable!()
+                }
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn extend_leaves_for_arbitrary_arity_tree() {
+        let mut builder = Builder::<MockHasher, _, _>::new();
+        builder.extend_leaves(TEST_STRS.iter());
+        let tree = builder.complete().unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
+            for (i, child) in hn.children().enumerate() {
+                if let Node::Leaf(ref ln) = *child {
+                    assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
                 } else {
                     unreachable!()
                 }
