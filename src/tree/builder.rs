@@ -16,6 +16,27 @@ use std::fmt::Display;
 use std::iter::IntoIterator;
 
 
+/// The facility to construct Merkle trees with.
+///
+/// A mutable `Builder` instance can be used to construct a complete Merkle
+/// tree. There are two ways of construction: incremental by using `Builder`
+/// instances to construct and compose trees, or by using the convenience
+/// method `build_balanced_from()` to create a balanced binary tree out of a
+/// sequence of input values.
+///
+/// When used in the incremental fashion, a `Builder` contains a
+/// sequence of nodes which can be populated in order, to become one layer
+/// – either a single leaf node, or the nodes immediately under the
+/// newly calculated root node – of a complete Merkle tree created with
+/// the method `complete()`. Either input data values or complete subtrees
+/// can be consumed to append leaf or hash nodes, respectively.
+///
+/// `Builder` has three type parameters: the hash exractor implementing trait
+/// `hash::Hasher`, the leaf data extractor implementing trait
+/// `leaf::ExractData`, and the input value type. Depending on the
+/// construction method and the context for type inference, some or all
+/// of these types can be inferred at the construction site.
+///
 #[derive(Debug)]
 pub struct Builder<D, L, In>
     where D: Hasher<In>,
@@ -30,6 +51,38 @@ impl<D, In> Builder<D, leaf::NoData, In>
     where D: Hasher<In>,
           D: Default
 {
+    /// Constructs a `Builder` with a default instance of the hash extractor,
+    /// and `NoData` in place of the list data extractor.
+    /// The constructed tree will contain only hash values in its leaf nodes.
+    ///
+    /// # Examples
+    ///
+    /// Unless otherwise constrained, the type of the `Hasher` implementation
+    /// has to be explicitly specified when using this method:
+    ///
+    /// ```
+    /// # extern crate mrkl;
+    /// # #[cfg(feature = "digest-hash")]
+    /// # extern crate sha2;
+    /// #
+    /// use mrkl::tree::Builder;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use mrkl::digest::DigestHasher;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use mrkl::digest::digest_hash::BigEndian;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use sha2::Sha256;
+    ///
+    /// # #[cfg(feature = "digest-hash")]
+    /// # fn main() {
+    /// type Hasher = DigestHasher<BigEndian<Sha256>>;
+    /// let mut builder = Builder::<Hasher, _, _>::new();
+    /// let data: &[u8] = b"the quick brown fox jumped over the lazy dog";
+    /// builder.push_leaf(data);
+    /// # }
+    /// # #[cfg(not(feature = "digest-hash"))]
+    /// # fn main() { }
+    /// ```
     pub fn new() -> Self {
         Self::from_hasher_leaf_data(D::default(), leaf::NoData)
     }
@@ -39,6 +92,8 @@ impl<D, L, In> Builder<D, L, In>
     where D: Hasher<In>,
           L: leaf::ExtractData<In>
 {
+    /// Constructs a `Builder` from the given instances of the hasher
+    /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
         Builder {
             hasher,
@@ -48,12 +103,18 @@ impl<D, L, In> Builder<D, L, In>
         }
     }
 
+    /// Appends a leaf node to the sequence of nodes.
+    ///
+    /// The hash value for the leaf node is calculated by the hash extractor,
+    /// and the leaf data value is obtained by the leaf data extractor
+    /// used by this `Builder`.
     pub fn push_leaf(&mut self, input: In) {
         let hash = self.hasher.hash_input(&input);
         let data = self.leaf_data_extractor.extract_data(input);
         self.nodes.push(Node::Leaf(LeafNode { hash, data }));
     }
 
+    /// Appends a Merkle subtree as a hash node to the sequence of nodes.
     pub fn push_tree(&mut self,
                      tree: MerkleTree<D::HashOutput, L::LeafData>)
     {
@@ -64,6 +125,22 @@ impl<D, L, In> Builder<D, L, In>
         Nodes(self.nodes.iter())
     }
 
+    /// Constructs a complete MerkleTree from the populated `Builder`,
+    /// consuming it in the process.
+    ///
+    /// The tree constructed will depend on the number of nodes this
+    /// instance has been populated with. From a single leaf node, a
+    /// single-level tree is constructed containing the leaf node as
+    /// root. From multiple nodes, a tree is constructed by creating a
+    /// root hash node as the parent of the sequence of the populated nodes,
+    /// hashed with the hash extractor's `hash_nodes()` method to
+    /// obtain the root hash.
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when called on an unpopulated
+    /// `Builder`.
+    ///
     pub fn complete(mut self)
                 -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
     {
@@ -86,6 +163,56 @@ impl<D, L, In> Builder<D, L, In>
     where D: Hasher<In> + Clone,
           L: leaf::ExtractData<In> + Clone
 {
+    /// Constructs a balanced binary Merkle tree from a sequence of
+    /// input values with a known length. The nodes' hashes are calculated
+    /// by the hash extractor, and the leaf data values are extracted from
+    /// input data with the leaf data exractor.
+    ///
+    /// This method is only available when the hash extractor and the leaf
+    /// data extractor implement `Clone`. To use a closure expression for
+    /// the leaf data extractor, ensure that it does not capture any
+    /// variables from the closure environment by passing it through the
+    /// helper function `leaf::extract_with()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when the input sequence is empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics when called on a `Builder` that has been populated with any
+    /// nodes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate mrkl;
+    /// # #[cfg(feature = "digest-hash")]
+    /// # extern crate sha2;
+    /// #
+    /// use mrkl::leaf;
+    /// use mrkl::tree::Builder;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use mrkl::digest::DigestHasher;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use mrkl::digest::digest_hash::BigEndian;
+    /// # #[cfg(feature = "digest-hash")]
+    /// use sha2::Sha256;
+    ///
+    /// # #[cfg(feature = "digest-hash")]
+    /// # fn main() {
+    /// type Hasher = DigestHasher<BigEndian<Sha256>>;
+    ///
+    /// let builder = Builder::from_hasher_leaf_data(
+    ///                 Hasher::new(),
+    ///                 leaf::extract_with(|s: &[u8]| { s[0] }));
+    /// let input: &'static [u8] = b"The quick brown fox \
+    ///                              jumps over the lazy dog";
+    /// let tree = builder.build_balanced_from(input.chunks(10)).unwrap();
+    /// # }
+    /// # #[cfg(not(feature = "digest-hash"))]
+    /// # fn main() { }
+    /// ```
     pub fn build_balanced_from<I>(mut self, iterable: I)
                 -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
         where I: IntoIterator<Item = In>,
@@ -136,6 +263,11 @@ impl<D, L, In> Builder<D, L, In>
     }
 }
 
+/// The error value returned when a tree was attempted to be constructed
+/// from empty input.
+///
+/// An empty tree is not considered to be a valid Merkle tree
+/// by the API of this crate.
 #[derive(Debug)]
 pub struct EmptyTree;
 
