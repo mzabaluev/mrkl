@@ -28,7 +28,7 @@ pub struct DigestHasher<D> {
 impl<D> DigestHasher<D>
     where D: EndianInput
 {
-    fn new() -> Self {
+    pub fn new() -> Self {
         DigestHasher { phantom: PhantomData }
     }
 }
