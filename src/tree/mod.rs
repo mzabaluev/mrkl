@@ -13,6 +13,7 @@ pub use self::builder::{Builder, EmptyTree};
 
 use std::iter::{Iterator, DoubleEndedIterator, ExactSizeIterator};
 use std::slice;
+use std::hash as std_hash;
 
 /// A complete Merkle tree.
 ///
@@ -142,7 +143,7 @@ macro_rules! impl_partial_eq {
     }
 }
 
-macro_rules! impl_partial_eq_for {
+macro_rules! impl_partial_eq_and_hash_for {
     {
         $(
             $This:ident (&$self:ident) {
@@ -165,13 +166,19 @@ macro_rules! impl_partial_eq_for {
                     $get_hash == other.hash()
                 }
             }
+
+            impl<H: std_hash::Hash, T> std_hash::Hash for $This<H, T> {
+                fn hash<S: std_hash::Hasher>(&$self, state: &mut S) {
+                    $get_hash.hash(state)
+                }
+            }
         )+
     }
 }
 
 impl_eq_for!(MerkleTree, Node, LeafNode, HashNode);
 
-impl_partial_eq_for! {
+impl_partial_eq_and_hash_for! {
     MerkleTree (&self) {
         self.root().hash()
     }
