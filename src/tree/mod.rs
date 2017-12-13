@@ -39,13 +39,18 @@ impl<H, T> MerkleTree<H, T> {
     pub fn root(&self) -> &Node<H, T> { &self.root }
 }
 
-impl<H: AsRef<[u8]>, T> Node<H, T> {
-
-    pub fn hash_bytes(&self) -> &[u8] {
+impl<H, T> Node<H, T> {
+    pub fn hash(&self) -> &H {
         match *self {
-            Node::Leaf(ref ln) => ln.hash_bytes(),
-            Node::Hash(ref hn) => hn.hash_bytes()
+            Node::Leaf(ref ln) => &ln.hash,
+            Node::Hash(ref hn) => &hn.hash
         }
+    }
+}
+
+impl<H: AsRef<[u8]>, T> Node<H, T> {
+    pub fn hash_bytes(&self) -> &[u8] {
+        self.hash().as_ref()
     }
 }
 
@@ -54,9 +59,8 @@ impl<H: AsRef<[u8]>, T> LeafNode<H, T> {
 }
 
 impl<H, T> LeafNode<H, T> {
-    pub fn data(&self) -> &T {
-        &self.data
-    }
+    pub fn hash(&self) -> &H { &self.hash }
+    pub fn data(&self) -> &T { &self.data }
 }
 
 impl<H: AsRef<[u8]>, T> HashNode<H, T> {
@@ -64,6 +68,8 @@ impl<H: AsRef<[u8]>, T> HashNode<H, T> {
 }
 
 impl<H, T> HashNode<H, T> {
+
+    pub fn hash(&self) -> &H { &self.hash }
 
     pub fn child_at(&self, index: usize) -> &Node<H, T> {
         &self.children[index]
