@@ -7,6 +7,18 @@
 // except according to those terms.
 
 //! Data types for representation and construction of Merkle trees.
+//!
+//! Constituent parts of complete, immutable Merkle trees are represented
+//! by types `MerkleTree`, `Node`, `LeafNode`, and `HashNode`. All of these
+//! types are comparable for equality with other of these types where it
+//! makes sense, except that `LeafNode` and `HashNode` are not directly
+//! comparable and never compare against the other type as equal when found
+//! gisguised by `MerkleTree` or `Node`.
+//! Each of the types also implements `Eq` and `std::hash::Hash`.
+//! Practical uniqueness of the hash values in a Merkle tree is used to
+//! provide very fast implementations for the standard comparison and
+//! hashing traits. However, if the hashing algorithm has been chosen
+//! poorly, incorrect results may occur.
 
 mod builder;
 pub use self::builder::{Builder, EmptyTree};
@@ -143,7 +155,7 @@ macro_rules! impl_partial_eq {
     }
 }
 
-macro_rules! impl_partial_eq_and_hash_for {
+macro_rules! impl_hash_for {
     {
         $(
             $This:ident (&$self:ident) {
@@ -152,21 +164,6 @@ macro_rules! impl_partial_eq_and_hash_for {
         )+
     } => {
         $(
-            impl_partial_eq! {
-                <MerkleTree> for $This (&$self, &other) {
-                    $get_hash == other.root().hash()
-                }
-                <Node> for $This (&$self, &other) {
-                    $get_hash == other.hash()
-                }
-                <LeafNode> for $This (&$self, &other) {
-                    $get_hash == other.hash()
-                }
-                <HashNode> for $This (&$self, &other) {
-                    $get_hash == other.hash()
-                }
-            }
-
             impl<H: std_hash::Hash, T> std_hash::Hash for $This<H, T> {
                 fn hash<S: std_hash::Hasher>(&$self, state: &mut S) {
                     $get_hash.hash(state)
@@ -178,7 +175,81 @@ macro_rules! impl_partial_eq_and_hash_for {
 
 impl_eq_for!(MerkleTree, Node, LeafNode, HashNode);
 
-impl_partial_eq_and_hash_for! {
+impl_partial_eq! {
+    <MerkleTree> for MerkleTree (&self, &other) {
+        self.root() == other.root()
+    }
+
+    <Node> for MerkleTree (&self, &other) {
+        self.root() == other
+    }
+
+    <LeafNode> for MerkleTree (&self, &other) {
+        self.root() == other
+    }
+
+    <HashNode> for MerkleTree (&self, &other) {
+        self.root() == other
+    }
+
+    <MerkleTree> for Node (&self, &other) {
+        self == other.root()
+    }
+
+    <Node> for Node (&self, &other) {
+        match (self, other) {
+            (&Node::Leaf(ref lhs), &Node::Leaf(ref rhs)) => lhs == rhs,
+            (&Node::Hash(ref lhs), &Node::Hash(ref rhs)) => lhs == rhs,
+            _ => false
+        }
+    }
+
+    <LeafNode> for Node (&self, &other) {
+        match *self {
+            Node::Leaf(ref lhs) => lhs == other,
+            _ => false
+        }
+    }
+
+    <HashNode> for Node (&self, &other) {
+        match *self {
+            Node::Hash(ref lhs) => lhs == other,
+            _ => false
+        }
+    }
+
+    <MerkleTree> for LeafNode (&self, &other) {
+        self == other.root()
+    }
+
+    <Node> for LeafNode (&self, &other) {
+        match *other {
+            Node::Leaf(ref rhs) => self == rhs,
+            _ => false
+        }
+    }
+
+    <LeafNode> for LeafNode (&self, &other) {
+        self.hash() == other.hash()
+    }
+
+    <MerkleTree> for HashNode (&self, &other) {
+        self == other.root()
+    }
+
+    <Node> for HashNode (&self, &other) {
+        match *other {
+            Node::Hash(ref rhs) => self == rhs,
+            _ => false
+        }
+    }
+
+    <HashNode> for HashNode (&self, &other) {
+        self.hash() == other.hash()
+    }
+}
+
+impl_hash_for! {
     MerkleTree (&self) {
         self.root().hash()
     }
