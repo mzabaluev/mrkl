@@ -6,6 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Support for cryptographic hash functions.
+//!
+//! This module provides an implementation of this crate's `hash::Hasher`
+//! trait that is backed by cryptographic hash functions conformant
+//! to the traits defined in crate `digest`, augmented with generic,
+//! byte order aware hashing provided by crate `digest-hash`.
+//!
+//! This module is only available if the crate has been compiled with
+//! the `digest-hash` feature, which is enabled by default.
+
 use hash::Hasher;
 use tree::{Nodes, Node};
 
@@ -20,6 +30,11 @@ use std::fmt::Debug;
 use std::marker::PhantomData;
 
 
+/// Makes a cryptographic hash function implementation
+/// available for hashing Merkle trees.
+///
+/// The hash function implementation type is defined by the type parameter.
+///
 #[derive(Clone)]
 pub struct DigestHasher<D> {
     phantom: PhantomData<D>
@@ -28,6 +43,7 @@ pub struct DigestHasher<D> {
 impl<D> DigestHasher<D>
     where D: EndianInput
 {
+    /// Constructs a new instance of the hash extractor.
     pub fn new() -> Self {
         DigestHasher { phantom: PhantomData }
     }
