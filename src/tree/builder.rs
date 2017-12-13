@@ -67,7 +67,7 @@ impl<D, In> Builder<D, leaf::NoData, In>
     /// #
     /// use mrkl::tree::Builder;
     /// # #[cfg(feature = "digest-hash")]
-    /// use mrkl::digest::DigestHasher;
+    /// use mrkl::digest::ByteDigestHasher;
     /// # #[cfg(feature = "digest-hash")]
     /// use mrkl::digest::digest_hash::BigEndian;
     /// # #[cfg(feature = "digest-hash")]
@@ -75,7 +75,7 @@ impl<D, In> Builder<D, leaf::NoData, In>
     ///
     /// # #[cfg(feature = "digest-hash")]
     /// # fn main() {
-    /// type Hasher = DigestHasher<BigEndian<Sha256>>;
+    /// type Hasher = ByteDigestHasher<Sha256>;
     /// let mut builder = Builder::<Hasher, _, _>::new();
     /// let data: &[u8] = b"the quick brown fox jumped over the lazy dog";
     /// builder.push_leaf(data);
@@ -193,7 +193,7 @@ impl<D, L, In> Builder<D, L, In>
     /// use mrkl::leaf;
     /// use mrkl::tree::Builder;
     /// # #[cfg(feature = "digest-hash")]
-    /// use mrkl::digest::DigestHasher;
+    /// use mrkl::digest::ByteDigestHasher;
     /// # #[cfg(feature = "digest-hash")]
     /// use mrkl::digest::digest_hash::BigEndian;
     /// # #[cfg(feature = "digest-hash")]
@@ -201,7 +201,7 @@ impl<D, L, In> Builder<D, L, In>
     ///
     /// # #[cfg(feature = "digest-hash")]
     /// # fn main() {
-    /// type Hasher = DigestHasher<BigEndian<Sha256>>;
+    /// type Hasher = ByteDigestHasher<Sha256>;
     ///
     /// let builder = Builder::from_hasher_leaf_data(
     ///                 Hasher::new(),
@@ -285,7 +285,7 @@ impl Error for EmptyTree {
 mod tests {
     use super::Builder;
 
-    use hash::Hasher;
+    use hash::{Hasher, NodeHasher};
     use leaf;
     use tree::{MerkleTree, EmptyTree, Nodes, Node};
 
@@ -295,11 +295,14 @@ mod tests {
     struct MockHasher;
 
     impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
-        type HashOutput = Vec<u8>;
-
         fn hash_input(&self, input: &In) -> Vec<u8> {
             input.as_ref().to_vec()
         }
+    }
+
+    impl NodeHasher for MockHasher {
+
+        type HashOutput = Vec<u8>;
 
         fn hash_nodes<'a, L>(&'a self,
                              iter: Nodes<'a, Vec<u8>, L>)

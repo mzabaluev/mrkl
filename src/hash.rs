@@ -15,16 +15,24 @@ use tree::Nodes;
 /// The abstraction provided by `Hasher` is generic over the input data type,
 /// agnostic to the implementation of the hash function, and allows different
 /// ways of calculating the hash of child nodes for their parent node.
-pub trait Hasher<In: ?Sized> {
-
-    /// The output of the hash function.
-    type HashOutput;
+pub trait Hasher<In: ?Sized> : NodeHasher {
 
     /// Hash an element of the input data.
     ///
     /// This method is used to calculate hash values of the leaf nodes
     /// in the Merkle tree under construction.
     fn hash_input(&self, input: &In) -> Self::HashOutput;
+}
+
+/// An algorithm to compute a hash of a sequence of child nodes.
+///
+/// The abstraction provided by `NodeHasher` is
+/// agnostic to the implementation of the hash function, and allows different
+/// ways of calculating the hash of child nodes for their parent node.
+pub trait NodeHasher {
+
+    /// The output of the hash function.
+    type HashOutput;
 
     /// Hash a sequence of child nodes to produce the parent hash value.
     ///
