@@ -30,6 +30,9 @@ pub trait Hasher<In: ?Sized> {
     ///
     /// This method is used to calculate hash values of the non-leaf nodes
     /// in the Merkle tree under construction.
+    ///
+    /// The type parameter represents arbitrary list node data and should
+    /// be ignored for all purposes.
     fn hash_nodes<'a, L>(&'a self,
                          iter: Nodes<'a, Self::HashOutput, L>)
                          -> Self::HashOutput;
