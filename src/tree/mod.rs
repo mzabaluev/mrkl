@@ -115,6 +115,77 @@ impl<H, T> HashNode<H, T> {
     }
 }
 
+// NOTE: The PartialEq, Eq, and Hash implementations assume that the hashing
+// is cryptographically strong.
+
+macro_rules! impl_eq_for {
+    ($($Name:ident),+) => {
+        $(impl<H: Eq, T> Eq for $Name<H, T> {})+
+    }
+}
+
+macro_rules! impl_partial_eq {
+    {
+        $(
+            <$Rhs:ident> for $This:ident (&$self:ident, &$other:ident) {
+                $logic:expr
+            }
+        )+
+    } => {
+        $(
+            impl<H: PartialEq, T> PartialEq<$Rhs<H, T>> for $This<H, T> {
+                fn eq(&$self, $other: &$Rhs<H, T>) -> bool {
+                    $logic
+                }
+            }
+        )+
+    }
+}
+
+macro_rules! impl_partial_eq_for {
+    {
+        $(
+            $This:ident (&$self:ident) {
+                $get_hash:expr
+            }
+        )+
+    } => {
+        $(
+            impl_partial_eq! {
+                <MerkleTree> for $This (&$self, &other) {
+                    $get_hash == other.root().hash()
+                }
+                <Node> for $This (&$self, &other) {
+                    $get_hash == other.hash()
+                }
+                <LeafNode> for $This (&$self, &other) {
+                    $get_hash == other.hash()
+                }
+                <HashNode> for $This (&$self, &other) {
+                    $get_hash == other.hash()
+                }
+            }
+        )+
+    }
+}
+
+impl_eq_for!(MerkleTree, Node, LeafNode, HashNode);
+
+impl_partial_eq_for! {
+    MerkleTree (&self) {
+        self.root().hash()
+    }
+    Node (&self) {
+        self.hash()
+    }
+    LeafNode (&self) {
+        self.hash()
+    }
+    HashNode (&self) {
+        self.hash()
+    }
+}
+
 /// An iterator over borrowed values of tree nodes, usually being the
 /// child nodes of a single hash node.
 #[derive(Clone, Debug)]
