@@ -36,14 +36,29 @@ use std::marker::PhantomData;
 /// second-preimage attacks by prepending the hash of each child node
 /// with a byte value indicating the node's type: 0 is prepended for
 /// leaf nodes, 1 for hash nodes.
-#[derive(Clone, Default)]
 pub struct DefaultNodeHasher<D> {
     phantom: PhantomData<D>
 }
 
-impl<D> DefaultNodeHasher<D> {
+impl<D> DefaultNodeHasher<D>
+where D: Default,
+      D: Input + FixedOutput
+{
     /// Constructs an instance of the node hasher.
     pub fn new() -> Self { DefaultNodeHasher { phantom: PhantomData } }
+}
+
+impl<D> Default for DefaultNodeHasher<D>
+where D: Default,
+      D: Input + FixedOutput
+{
+    fn default() -> Self { DefaultNodeHasher::new() }
+}
+
+impl<D> Clone for DefaultNodeHasher<D> {
+    fn clone(&self) -> Self {
+        DefaultNodeHasher { phantom: PhantomData }
+    }
 }
 
 impl<D> Debug for DefaultNodeHasher<D> {
@@ -90,7 +105,6 @@ where D: Default,
 /// defined by the second type parameter. The default choice should be good
 /// enough unless a specific way to derive concatenated hashes is required.
 ///
-#[derive(Clone)]
 pub struct DigestHasher<D, Nh = DefaultNodeHasher<D>>
 where D: FixedOutput,
       Nh: NodeHasher
@@ -100,7 +114,8 @@ where D: FixedOutput,
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: EndianInput + FixedOutput,
+where D: Default,
+      D: EndianInput + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -111,7 +126,8 @@ where D: EndianInput + FixedOutput,
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: EndianInput + FixedOutput,
+where D: Default,
+      D: EndianInput + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
@@ -125,11 +141,25 @@ where D: EndianInput + FixedOutput,
 }
 
 impl<D, Nh> Default for DigestHasher<D, Nh>
-where D: EndianInput + FixedOutput,
+where D: Default,
+      D: EndianInput + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
     fn default() -> Self { DigestHasher::new() }
+}
+
+impl<D, Nh> Clone for DigestHasher<D, Nh>
+where D: FixedOutput,
+      Nh: NodeHasher,
+      Nh: Clone
+{
+    fn clone(&self) -> Self {
+        DigestHasher {
+            node_hasher: self.node_hasher.clone(),
+            phantom: PhantomData
+        }
+    }
 }
 
 impl<D, Nh> Debug for DigestHasher<D, Nh>
@@ -185,7 +215,6 @@ where D: FixedOutput,
 /// defined by the second type parameter. The default choice should be good
 /// enough unless a specific way to derive concatenated hashes is required.
 ///
-#[derive(Clone)]
 pub struct ByteDigestHasher<D, Nh = DefaultNodeHasher<D>>
 where D: FixedOutput,
       Nh: NodeHasher
@@ -195,7 +224,8 @@ where D: FixedOutput,
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: Input + FixedOutput,
+where D: Default,
+      D: Input + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -206,7 +236,8 @@ where D: Input + FixedOutput,
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: Input + FixedOutput,
+where D: Default,
+      D: Input + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
@@ -220,11 +251,25 @@ where D: Input + FixedOutput,
 }
 
 impl<D, Nh> Default for ByteDigestHasher<D, Nh>
-where D: Input + FixedOutput,
+where D: Default,
+      D: Input + FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
     fn default() -> Self { ByteDigestHasher::new() }
+}
+
+impl<D, Nh> Clone for ByteDigestHasher<D, Nh>
+where D: FixedOutput,
+      Nh: NodeHasher,
+      Nh: Clone
+{
+    fn clone(&self) -> Self {
+        ByteDigestHasher {
+            node_hasher: self.node_hasher.clone(),
+            phantom: PhantomData
+        }
+    }
 }
 
 impl<D, Nh> Debug for ByteDigestHasher<D, Nh>
