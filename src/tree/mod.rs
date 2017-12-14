@@ -25,6 +25,8 @@ pub use self::builder::{Builder, EmptyTree};
 
 use std::iter::{Iterator, DoubleEndedIterator, ExactSizeIterator};
 use std::slice;
+use std::fmt;
+use std::fmt::Debug;
 use std::hash as std_hash;
 
 /// A complete Merkle tree.
@@ -45,7 +47,6 @@ pub struct MerkleTree<H, T> {
 /// A Merkle tree node, which can be either a leaf node or a hash node.
 ///
 /// `Node` values can be borrowed from under a `MerkleTree`.
-#[derive(Debug)]
 pub enum Node<H, T> {
     /// A leaf node value.
     Leaf(LeafNode<H, T>),
@@ -74,6 +75,15 @@ pub struct HashNode<H, T> {
 impl<H, T> MerkleTree<H, T> {
     /// Returns the root node of the tree as a borrowed reference.
     pub fn root(&self) -> &Node<H, T> { &self.root }
+}
+
+impl<H: Debug, T: Debug> Debug for Node<H, T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Node::Leaf(ref ln) => ln.fmt(f),
+            Node::Hash(ref hn) => hn.fmt(f)
+        }
+    }
 }
 
 impl<H, T> Node<H, T> {
