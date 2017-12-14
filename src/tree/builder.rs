@@ -12,6 +12,7 @@ use leaf;
 
 use std::error::Error;
 use std::fmt;
+use std::fmt::Debug;
 use std::fmt::Display;
 use std::iter::IntoIterator;
 
@@ -37,7 +38,6 @@ use std::iter::IntoIterator;
 /// construction method and the context for type inference, some or all
 /// of these types can be inferred at the construction site.
 ///
-#[derive(Debug)]
 pub struct Builder<D, L, In>
     where D: Hasher<In>,
           L: leaf::ExtractData<In>
@@ -45,6 +45,23 @@ pub struct Builder<D, L, In>
     hasher: D,
     leaf_data_extractor: L,
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
+}
+
+impl<D, L, In> Debug for Builder<D, L, In>
+where D: Debug,
+      D: Hasher<In>,
+      D::HashOutput: Debug,
+      L: Debug,
+      L: leaf::ExtractData<In>,
+      L::LeafData: Debug
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_struct("Builder")
+         .field("hasher", &self.hasher)
+         .field("leaf_data_extractor", &self.leaf_data_extractor)
+         .field("nodes", &self.nodes)
+         .finish()
+    }
 }
 
 impl<D, In> Builder<D, leaf::NoData, In>
