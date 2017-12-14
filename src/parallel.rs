@@ -119,3 +119,82 @@ where D: Hasher<L::Input> + Clone + Send,
         builder.complete().unwrap()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Builder;
+
+    use super::rayon::iter;
+
+    use hash::{Hasher, NodeHasher};
+    use tree::{Nodes, Node};
+
+    const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
+
+    #[derive(Clone, Debug, Default)]
+    struct MockHasher;
+
+    impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
+        fn hash_input(&self, input: &In) -> Vec<u8> {
+            input.as_ref().to_vec()
+        }
+    }
+
+    impl NodeHasher for MockHasher {
+
+        type HashOutput = Vec<u8>;
+
+        fn hash_nodes<'a, L>(&'a self,
+                             iter: Nodes<'a, Vec<u8>, L>)
+                             -> Vec<u8>
+        {
+            let mut dump = Vec::new();
+            for node in iter {
+                match *node {
+                    Node::Leaf(ref ln) => {
+                        dump.push(b'>');
+                        dump.extend(ln.hash_bytes());
+                    }
+                    Node::Hash(ref hn) => {
+                        dump.extend(b"#(");
+                        dump.extend(hn.hash_bytes());
+                        dump.extend(b")");
+                    }
+                }
+            }
+            dump
+        }
+    }
+
+    #[test]
+    fn build_balanced_from_empty() {
+        let builder = Builder::<MockHasher, _>::new();
+        builder.build_balanced_from(iter::empty::<[u8; 1]>()).unwrap_err();
+    }
+
+    #[test]
+    fn build_balanced_leaf() {
+        let builder = Builder::<MockHasher, _>::new();
+        let iter = iter::repeatn(TEST_DATA, 1);
+        let tree = builder.build_balanced_from(iter).unwrap();
+        if let Node::Leaf(ref ln) = *tree.root() {
+            assert_eq!(ln.hash_bytes(), TEST_DATA);
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn build_balanced_tree() {
+        let builder = Builder::<MockHasher, _>::new();
+        let data: Vec<_> = TEST_DATA.chunks(15).collect();
+        let tree = builder.build_balanced_from(data).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
+                                    > the lazy dog";
+            assert_eq!(hn.hash_bytes(), expected);
+        } else {
+            unreachable!()
+        }
+    }
+}
