@@ -6,11 +6,16 @@ readme = "README.md"
 license = "MIT/Apache-2.0"
 
 [features]
-default = ["digest"]
+default = ["digest", "parallel"]
 digest = ["digest-hash"]
+parallel = ["rayon"]
 
 [dependencies.digest-hash]
 git = "https://github.com/mzabaluev/digest-hash-rs.git"
+optional = true
+
+[dependencies.rayon]
+version = "0.9"
 optional = true
 
 [dev-dependencies]
