@@ -266,8 +266,14 @@ impl_hash_for! {
 
 /// An iterator over borrowed values of tree nodes, usually being the
 /// child nodes of a single hash node.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Nodes<'a, H: 'a, T: 'a>(slice::Iter<'a, Node<H, T>>);
+
+impl<'a, H, T> Clone for Nodes<'a, H, T> {
+    fn clone(&self) -> Self {
+        Nodes(self.0.clone())
+    }
+}
 
 impl<'a, H, T> Iterator for Nodes<'a, H, T> {
     type Item = &'a Node<H, T>;
