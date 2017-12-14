@@ -380,7 +380,8 @@ mod tests {
         const CHUNK_SIZE: usize = 15;
         let hasher = ByteDigestHasher::<Sha256, _>::with_node_hasher(
                         CustomNodeHasher);
-        let mut builder = Builder::from_hasher_leaf_data(hasher, leaf::NoData);
+        let mut builder = Builder::from_hasher_leaf_data(
+                            hasher, leaf::no_data());
         builder.extend_leaves(TEST_DATA.chunks(CHUNK_SIZE));
         let tree = builder.complete().unwrap();
         let mut root_digest = Sha256::new();
@@ -397,7 +398,8 @@ mod tests {
         let test_input = [42u16, 43u16];
         let hasher = DigestHasher::<BigEndian<Sha256>, _>::with_node_hasher(
                         CustomNodeHasher);
-        let mut builder = Builder::from_hasher_leaf_data(hasher, leaf::NoData);
+        let mut builder = Builder::from_hasher_leaf_data(
+                            hasher, leaf::no_data());
         builder.extend_leaves(test_input.iter());
         let tree = builder.complete().unwrap();
         let mut root_digest = Sha256::new();

@@ -40,7 +40,7 @@ use std::iter::IntoIterator;
 ///
 pub struct Builder<D, L, In>
     where D: Hasher<In>,
-          L: leaf::ExtractData<In>
+          L: leaf::ExtractData<Input = In>
 {
     hasher: D,
     leaf_data_extractor: L,
@@ -52,7 +52,7 @@ where D: Debug,
       D: Hasher<In>,
       D::HashOutput: Debug,
       L: Debug,
-      L: leaf::ExtractData<In>,
+      L: leaf::ExtractData<Input = In>,
       L::LeafData: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -64,7 +64,7 @@ where D: Debug,
     }
 }
 
-impl<D, In> Builder<D, leaf::NoData, In>
+impl<D, In> Builder<D, leaf::NoData<In>, In>
     where D: Hasher<In>,
           D: Default
 {
@@ -99,13 +99,13 @@ impl<D, In> Builder<D, leaf::NoData, In>
     /// # fn main() { }
     /// ```
     pub fn new() -> Self {
-        Self::from_hasher_leaf_data(D::default(), leaf::NoData)
+        Self::from_hasher_leaf_data(D::default(), leaf::no_data())
     }
 }
 
 impl<D, L, In> Builder<D, L, In>
     where D: Hasher<In>,
-          L: leaf::ExtractData<In>
+          L: leaf::ExtractData<Input = In>
 {
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
@@ -191,7 +191,7 @@ impl<D, L, In> Builder<D, L, In>
 
 impl<D, L, In> Builder<D, L, In>
     where D: Hasher<In> + Clone,
-          L: leaf::ExtractData<In> + Clone
+          L: leaf::ExtractData<Input = In> + Clone
 {
     /// Constructs a balanced binary Merkle tree from a sequence of
     /// input values with a known length. The nodes' hashes are calculated
@@ -373,7 +373,7 @@ mod tests {
 
     #[test]
     fn builder_no_data_fixed_size_array() {
-        let mut builder = Builder::<MockHasher, leaf::NoData, _>::new();
+        let mut builder = Builder::<MockHasher, _, _>::new();
         builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
         let tree = builder.complete().unwrap();
         assert_eq!(tree.root().hash_bytes(), &[1, 2, 3, 4]);
@@ -469,7 +469,7 @@ mod tests {
     fn child_out_of_range() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
-                hasher, leaf::NoData);
+                hasher, leaf::no_data());
         builder.push_leaf("eats shoots");
         builder.push_leaf("and leaves");
         let tree = builder.complete().unwrap();
@@ -589,14 +589,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn build_balanced_on_populated_builder() {
-        let mut builder = Builder::<MockHasher, leaf::NoData, &[u8]>::new();
+        let mut builder = Builder::<MockHasher, _, &[u8]>::new();
         builder.push_leaf(&[0u8]);
         let _ = builder.build_balanced_from(TEST_DATA.chunks(1));
     }
 
     #[test]
     fn build_balanced_no_leaf_data() {
-        let builder = Builder::<MockHasher, leaf::NoData, _>::new();
+        let builder = Builder::<MockHasher, _, _>::new();
         let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
