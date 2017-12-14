@@ -69,8 +69,6 @@ impl<D, In> Builder<D, leaf::NoData, In>
     /// # #[cfg(feature = "digest-hash")]
     /// use mrkl::digest::ByteDigestHasher;
     /// # #[cfg(feature = "digest-hash")]
-    /// use mrkl::digest::digest_hash::BigEndian;
-    /// # #[cfg(feature = "digest-hash")]
     /// use sha2::Sha256;
     ///
     /// # #[cfg(feature = "digest-hash")]
@@ -210,8 +208,6 @@ impl<D, L, In> Builder<D, L, In>
     /// # #[cfg(feature = "digest-hash")]
     /// use mrkl::digest::ByteDigestHasher;
     /// # #[cfg(feature = "digest-hash")]
-    /// use mrkl::digest::digest_hash::BigEndian;
-    /// # #[cfg(feature = "digest-hash")]
     /// use sha2::Sha256;
     ///
     /// # #[cfg(feature = "digest-hash")]
@@ -224,6 +220,7 @@ impl<D, L, In> Builder<D, L, In>
     /// let input: &'static [u8] = b"The quick brown fox \
     ///                              jumps over the lazy dog";
     /// let tree = builder.build_balanced_from(input.chunks(10)).unwrap();
+    /// #     let _ = tree;
     /// # }
     /// # #[cfg(not(feature = "digest-hash"))]
     /// # fn main() { }
