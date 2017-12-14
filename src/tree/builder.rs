@@ -12,7 +12,6 @@ use leaf;
 
 use std::error::Error;
 use std::fmt;
-use std::fmt::Debug;
 use std::fmt::Display;
 use std::iter::IntoIterator;
 
@@ -32,41 +31,25 @@ use std::iter::IntoIterator;
 /// the method `complete()`. Either input data values or complete subtrees
 /// can be consumed to append leaf or hash nodes, respectively.
 ///
-/// `Builder` has three type parameters: the hash exractor implementing trait
-/// `hash::Hasher`, the leaf data extractor implementing trait
-/// `leaf::ExractData`, and the input value type. Depending on the
-/// construction method and the context for type inference, some or all
-/// of these types can be inferred at the construction site.
+/// `Builder` has two type parameters: the hash exractor implementing trait
+/// `hash::Hasher`, and the leaf data extractor implementing trait
+/// `leaf::ExtractData`. Depending on the construction method and the
+/// context for type inference, one or both of these types can be inferred
+/// at the construction site.
 ///
-pub struct Builder<D, L, In>
-    where D: Hasher<In>,
-          L: leaf::ExtractData<Input = In>
+#[derive(Debug)]
+pub struct Builder<D, L>
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData,
 {
     hasher: D,
     leaf_data_extractor: L,
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
 }
 
-impl<D, L, In> Debug for Builder<D, L, In>
-where D: Debug,
-      D: Hasher<In>,
-      D::HashOutput: Debug,
-      L: Debug,
-      L: leaf::ExtractData<Input = In>,
-      L::LeafData: Debug
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        f.debug_struct("Builder")
-         .field("hasher", &self.hasher)
-         .field("leaf_data_extractor", &self.leaf_data_extractor)
-         .field("nodes", &self.nodes)
-         .finish()
-    }
-}
-
-impl<D, In> Builder<D, leaf::NoData<In>, In>
-    where D: Hasher<In>,
-          D: Default
+impl<D, In> Builder<D, leaf::NoData<In>>
+where D: Hasher<In>,
+      D: Default
 {
     /// Constructs a `Builder` with a default instance of the hash extractor,
     /// and `NoData` in place of the list data extractor.
@@ -91,7 +74,7 @@ impl<D, In> Builder<D, leaf::NoData<In>, In>
     /// # #[cfg(feature = "digest")]
     /// # fn main() {
     /// type Hasher = ByteDigestHasher<Sha256>;
-    /// let mut builder = Builder::<Hasher, _, _>::new();
+    /// let mut builder = Builder::<Hasher, _>::new();
     /// let data: &[u8] = b"the quick brown fox jumped over the lazy dog";
     /// builder.push_leaf(data);
     /// # }
@@ -103,9 +86,9 @@ impl<D, In> Builder<D, leaf::NoData<In>, In>
     }
 }
 
-impl<D, L, In> Builder<D, L, In>
-    where D: Hasher<In>,
-          L: leaf::ExtractData<Input = In>
+impl<D, L> Builder<D, L>
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData,
 {
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
@@ -123,7 +106,7 @@ impl<D, L, In> Builder<D, L, In>
     /// The hash value for the leaf node is calculated by the hash extractor,
     /// and the leaf data value is obtained by the leaf data extractor
     /// used by this `Builder`.
-    pub fn push_leaf(&mut self, input: In) {
+    pub fn push_leaf(&mut self, input: L::Input) {
         let hash = self.hasher.hash_input(&input);
         let data = self.leaf_data_extractor.extract_data(input);
         self.nodes.push(Node::Leaf(LeafNode { hash, data }));
@@ -138,12 +121,12 @@ impl<D, L, In> Builder<D, L, In>
 
     /// Appends leaf nodes with input data retrieved from an iterable.
     pub fn extend_leaves<I>(&mut self, iter: I)
-    where I: IntoIterator<Item = In> {
+    where I: IntoIterator<Item = L::Input> {
         self.extend_leaves_impl(iter.into_iter())
     }
 
     fn extend_leaves_impl<I>(&mut self, iter: I)
-    where I: Iterator<Item = In> {
+    where I: Iterator<Item = L::Input> {
         let (size_low, _) = iter.size_hint();
         self.nodes.reserve(size_low);
         for input in iter {
@@ -189,9 +172,9 @@ impl<D, L, In> Builder<D, L, In>
     }
 }
 
-impl<D, L, In> Builder<D, L, In>
-    where D: Hasher<In> + Clone,
-          L: leaf::ExtractData<Input = In> + Clone
+impl<D, L> Builder<D, L>
+where D: Hasher<L::Input> + Clone,
+      L: leaf::ExtractData + Clone,
 {
     /// Constructs a balanced binary Merkle tree from a sequence of
     /// input values with a known length. The nodes' hashes are calculated
@@ -242,10 +225,12 @@ impl<D, L, In> Builder<D, L, In>
     /// # #[cfg(not(feature = "digest"))]
     /// # fn main() { }
     /// ```
-    pub fn build_balanced_from<I>(mut self, iterable: I)
-                -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
-        where I: IntoIterator<Item = In>,
-              I::IntoIter: ExactSizeIterator
+    pub fn build_balanced_from<I>(
+        mut self,
+        iterable: I
+    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    where I: IntoIterator<Item = L::Input>,
+          I::IntoIter: ExactSizeIterator
     {
         assert!(self.nodes.is_empty(),
                 "build_balanced_from() called on a populated Builder");
@@ -261,7 +246,7 @@ impl<D, L, In> Builder<D, L, In>
     }
 
     fn populate_balanced_from_iter<I>(&mut self, iter: &mut I, len: usize)
-        where I: Iterator<Item = In>
+    where I: Iterator<Item = L::Input>
     {
         debug_assert!(len != 0);
         if len == 1 {
@@ -360,7 +345,7 @@ mod tests {
         use std::error::Error;
 
         fn daft() -> Result<MerkleTree<Vec<u8>, ()>, EmptyTree> {
-            let builder = Builder::<MockHasher, _, String>::new();
+            let builder = Builder::<MockHasher, leaf::NoData<String>>::new();
             let _ = builder.complete()?;
             unreachable!()
         }
@@ -373,7 +358,7 @@ mod tests {
 
     #[test]
     fn builder_no_data_fixed_size_array() {
-        let mut builder = Builder::<MockHasher, _, _>::new();
+        let mut builder = Builder::<MockHasher, _>::new();
         builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
         let tree = builder.complete().unwrap();
         assert_eq!(tree.root().hash_bytes(), &[1, 2, 3, 4]);
@@ -429,7 +414,7 @@ mod tests {
     #[test]
     fn builder_over_nonstatic_slice() {
         let v = Vec::from(TEST_DATA);
-        let mut builder = Builder::<MockHasher, _, &[u8]>::new();
+        let mut builder = Builder::<MockHasher, leaf::NoData<&[u8]>>::new();
         builder.push_leaf(&v[..]);
         let tree = builder.complete().unwrap();
         assert_eq!(tree.root().hash_bytes(), TEST_DATA);
@@ -511,7 +496,7 @@ mod tests {
 
     #[test]
     fn extend_leaves_for_arbitrary_arity_tree() {
-        let mut builder = Builder::<MockHasher, _, _>::new();
+        let mut builder = Builder::<MockHasher, _>::new();
         builder.extend_leaves(TEST_STRS.iter());
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
@@ -582,21 +567,21 @@ mod tests {
     #[test]
     fn build_balanced_from_empty() {
         use std::iter::empty;
-        let builder = Builder::<MockHasher, _, _>::new();
+        let builder = Builder::<MockHasher, _>::new();
         builder.build_balanced_from(empty::<[u8; 1]>()).unwrap_err();
     }
 
     #[test]
     #[should_panic]
     fn build_balanced_on_populated_builder() {
-        let mut builder = Builder::<MockHasher, _, &[u8]>::new();
-        builder.push_leaf(&[0u8]);
+        let mut builder = Builder::<MockHasher, _>::new();
+        builder.push_leaf(&[0u8][..]);
         let _ = builder.build_balanced_from(TEST_DATA.chunks(1));
     }
 
     #[test]
     fn build_balanced_no_leaf_data() {
-        let builder = Builder::<MockHasher, _, _>::new();
+        let builder = Builder::<MockHasher, _>::new();
         let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
