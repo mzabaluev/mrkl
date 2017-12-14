@@ -79,23 +79,23 @@ impl<D, In> Builder<D, leaf::NoData, In>
     ///
     /// ```
     /// # extern crate mrkl;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// # extern crate sha2;
     /// #
     /// use mrkl::tree::Builder;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// use mrkl::digest::ByteDigestHasher;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// use sha2::Sha256;
     ///
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// # fn main() {
     /// type Hasher = ByteDigestHasher<Sha256>;
     /// let mut builder = Builder::<Hasher, _, _>::new();
     /// let data: &[u8] = b"the quick brown fox jumped over the lazy dog";
     /// builder.push_leaf(data);
     /// # }
-    /// # #[cfg(not(feature = "digest-hash"))]
+    /// # #[cfg(not(feature = "digest"))]
     /// # fn main() { }
     /// ```
     pub fn new() -> Self {
@@ -217,17 +217,17 @@ impl<D, L, In> Builder<D, L, In>
     ///
     /// ```
     /// # extern crate mrkl;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// # extern crate sha2;
     /// #
     /// use mrkl::leaf;
     /// use mrkl::tree::Builder;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// use mrkl::digest::ByteDigestHasher;
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// use sha2::Sha256;
     ///
-    /// # #[cfg(feature = "digest-hash")]
+    /// # #[cfg(feature = "digest")]
     /// # fn main() {
     /// type Hasher = ByteDigestHasher<Sha256>;
     ///
@@ -239,7 +239,7 @@ impl<D, L, In> Builder<D, L, In>
     /// let tree = builder.build_balanced_from(input.chunks(10)).unwrap();
     /// #     let _ = tree;
     /// # }
-    /// # #[cfg(not(feature = "digest-hash"))]
+    /// # #[cfg(not(feature = "digest"))]
     /// # fn main() { }
     /// ```
     pub fn build_balanced_from<I>(mut self, iterable: I)

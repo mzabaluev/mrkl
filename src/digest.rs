@@ -14,7 +14,7 @@
 //! generic, byte order aware hashing provided by crate `digest-hash`.
 //!
 //! This module is only available if the crate has been compiled with
-//! the `digest-hash` feature, which is enabled by default.
+//! the `digest` feature, which is enabled by default.
 
 use hash::{Hasher, NodeHasher};
 use tree::{Nodes, Node};

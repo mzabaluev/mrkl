@@ -6,7 +6,8 @@ readme = "README.md"
 license = "MIT/Apache-2.0"
 
 [features]
-default = ["digest-hash"]
+default = ["digest"]
+digest = ["digest-hash"]
 
 [dependencies.digest-hash]
 git = "https://github.com/mzabaluev/digest-hash-rs.git"
