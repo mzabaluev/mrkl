@@ -97,20 +97,38 @@ where D: Hasher<L::Input> + Clone + Send,
                     Either::Right(node)
                 }
             });
-        self.join(left, right)
+        self.reduce_and_join_parts(left, right)
     }
 
-    fn join(
+    fn reduce_and_join_parts(
         self,
         left:  Vec<MerkleTree<D::HashOutput, L::LeafData>>,
         right: Vec<MerkleTree<D::HashOutput, L::LeafData>>
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let left_builder = self.clone();
         let right_builder = self.clone();
-        let (left_tree, right_tree) = rayon::join(
+        self.join(
             move || { left_builder.reduce(left.into_par_iter()) },
             move || { right_builder.reduce(right.into_par_iter()) }
-        );
+        )
+    }
+}
+
+impl<D, L> Builder<D, L>
+where D: Hasher<L::Input> + Clone + Send,
+      L: leaf::ExtractData + Clone + Send,
+      D::HashOutput: Send,
+      L::LeafData: Send
+{
+    pub fn join<LF, RF>(
+        self,
+        left: LF,
+        right: RF
+    ) -> MerkleTree<D::HashOutput, L::LeafData>
+    where LF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send,
+          RF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send
+    {
+        let (left_tree, right_tree) = rayon::join(left, right);
         let mut builder = tree::Builder::from_hasher_leaf_data(
                     self.hasher,
                     self.leaf_data_extractor);
