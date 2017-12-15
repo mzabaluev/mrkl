@@ -26,6 +26,11 @@ pub use self::builder::{Builder, EmptyTree};
 #[cfg(feature = "parallel")]
 pub mod parallel;
 
+mod plumbing;
+
+#[cfg(test)]
+mod testmocks;
+
 use std::iter::{Iterator, DoubleEndedIterator, ExactSizeIterator};
 use std::slice;
 use std::fmt;

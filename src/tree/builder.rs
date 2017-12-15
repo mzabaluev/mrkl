@@ -7,6 +7,7 @@
 // except according to those terms.
 
 use super::{MerkleTree, Node, HashNode, LeafNode, Nodes};
+use super::plumbing;
 use hash::Hasher;
 use leaf;
 
@@ -45,6 +46,21 @@ where D: Hasher<L::Input>,
     hasher: D,
     leaf_data_extractor: L,
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
+}
+
+impl<D, L> plumbing::BuilderNodes for Builder<D, L>
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData,
+{
+    type HashOutput = D::HashOutput;
+    type LeafData = L::LeafData;
+
+    fn append_nodes(
+        &mut self,
+        take_from: &mut Vec<Node<Self::HashOutput, Self::LeafData>>
+    ) {
+        self.nodes.append(take_from);
+    }
 }
 
 impl<D, In> Builder<D, leaf::NoData<In>>
@@ -93,11 +109,21 @@ where D: Hasher<L::Input>,
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
+        Self::n_ary_from_hasher_leaf_data(2, hasher, leaf_data_extractor)
+    }
+
+    /// Constructs a `Builder` with capacity reserved for the given number
+    /// of nodes,
+    /// from the given instances of the hasher and the leaf data extractor.
+    pub fn n_ary_from_hasher_leaf_data(
+        n: usize,
+        hasher: D,
+        leaf_data_extractor: L
+    ) -> Self {
         Builder {
             hasher,
             leaf_data_extractor,
-            // expecting two children per node
-            nodes: Vec::with_capacity(2)
+            nodes: Vec::with_capacity(n)
         }
     }
 
@@ -299,46 +325,12 @@ impl Error for EmptyTree {
 mod tests {
     use super::Builder;
 
-    use hash::{Hasher, NodeHasher};
     use leaf;
-    use tree::{MerkleTree, EmptyTree, Nodes, Node};
+    use tree::{MerkleTree, EmptyTree, Node};
+
+    use super::super::testmocks::MockHasher;
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
-
-    #[derive(Clone, Debug, Default)]
-    struct MockHasher;
-
-    impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
-        fn hash_input(&self, input: &In) -> Vec<u8> {
-            input.as_ref().to_vec()
-        }
-    }
-
-    impl NodeHasher for MockHasher {
-
-        type HashOutput = Vec<u8>;
-
-        fn hash_nodes<'a, L>(&'a self,
-                             iter: Nodes<'a, Vec<u8>, L>)
-                             -> Vec<u8>
-        {
-            let mut dump = Vec::new();
-            for node in iter {
-                match *node {
-                    Node::Leaf(ref ln) => {
-                        dump.push(b'>');
-                        dump.extend(ln.hash_bytes());
-                    }
-                    Node::Hash(ref hn) => {
-                        dump.extend(b"#(");
-                        dump.extend(hn.hash_bytes());
-                        dump.extend(b")");
-                    }
-                }
-            }
-            dump
-        }
-    }
 
     #[test]
     fn empty_tree() {
@@ -501,7 +493,9 @@ mod tests {
         let tree = builder.complete().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
-            for (i, child) in hn.children().enumerate() {
+            let mut peek_iter = hn.children().peekable();
+            assert!(peek_iter.peek().is_some());
+            for (i, child) in peek_iter.enumerate() {
                 if let Node::Leaf(ref ln) = *child {
                     assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
                 } else {

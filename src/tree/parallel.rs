@@ -15,6 +15,7 @@ use hash::Hasher;
 use leaf;
 use tree;
 use tree::{MerkleTree, EmptyTree};
+use super::plumbing::BuilderNodes;
 
 
 #[derive(Clone, Debug, Default)]
@@ -25,15 +26,40 @@ pub struct Builder<D, L> {
 
 impl<D, In> Builder<D, leaf::NoData<In>>
 where D: Default,
-      D: Hasher<In> + Clone + Send,
-      D::HashOutput: Send,
-      In: Send
+      D: Hasher<In>
 {
     pub fn new() -> Self {
         Builder {
             hasher: D::default(),
             leaf_data_extractor: leaf::no_data()
         }
+    }
+}
+
+impl<D, L> Builder<D, L>
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData
+{
+    fn into_serial_builder(self) -> tree::Builder<D, L> {
+        tree::Builder::from_hasher_leaf_data(
+            self.hasher,
+            self.leaf_data_extractor)
+    }
+
+    fn into_n_ary_serial_builder(self, n: usize) -> tree::Builder<D, L> {
+        tree::Builder::n_ary_from_hasher_leaf_data(
+            n,
+            self.hasher,
+            self.leaf_data_extractor)
+    }
+
+    pub fn into_leaf(
+        self,
+        input: L::Input
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        let mut builder = self.into_n_ary_serial_builder(1);
+        builder.push_leaf(input);
+        builder.complete().unwrap()
     }
 }
 
@@ -64,11 +90,7 @@ where D: Hasher<L::Input> + Clone + Send,
         }
         let leaves =
             iter.map_with(self.clone(), |master, input| {
-                let mut builder = tree::Builder::from_hasher_leaf_data(
-                            master.hasher.clone(),
-                            master.leaf_data_extractor.clone());
-                builder.push_leaf(input);
-                builder.complete().unwrap()
+                master.clone().into_leaf(input)
             });
         Ok(self.reduce(leaves))
     }
@@ -115,8 +137,8 @@ where D: Hasher<L::Input> + Clone + Send,
 }
 
 impl<D, L> Builder<D, L>
-where D: Hasher<L::Input> + Clone + Send,
-      L: leaf::ExtractData + Clone + Send,
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData,
       D::HashOutput: Send,
       L::LeafData: Send
 {
@@ -129,12 +151,37 @@ where D: Hasher<L::Input> + Clone + Send,
           RF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send
     {
         let (left_tree, right_tree) = rayon::join(left, right);
-        let mut builder = tree::Builder::from_hasher_leaf_data(
-                    self.hasher,
-                    self.leaf_data_extractor);
+        let mut builder = self.into_serial_builder();
         builder.push_tree(left_tree);
         builder.push_tree(right_tree);
         builder.complete().unwrap()
+    }
+
+    pub fn collect_nodes_from<I>(
+        self,
+        iterable: I
+    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    where I: IntoParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
+    {
+        self.collect_nodes_from_iter(iterable.into_par_iter())
+    }
+
+    pub fn collect_nodes_from_iter<I>(
+        self,
+        iter: I
+    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    where I: ParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
+    {
+        // TODO: once specialization is stabilized, utilize
+        // .collect_into() with indexed iterators.
+        let mut nodes: Vec<_> =
+            iter.map(|tree| {
+                tree.root
+            })
+            .collect();
+        let mut builder = self.into_n_ary_serial_builder(nodes.len());
+        builder.append_nodes(&mut nodes);
+        builder.complete()
     }
 }
 
@@ -142,47 +189,14 @@ where D: Hasher<L::Input> + Clone + Send,
 mod tests {
     use super::Builder;
 
+    use super::rayon::prelude::*;
     use super::rayon::iter;
 
-    use hash::{Hasher, NodeHasher};
-    use tree::{Nodes, Node};
+    use leaf;
+    use tree::Node;
+    use super::super::testmocks::MockHasher;
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
-
-    #[derive(Clone, Debug, Default)]
-    struct MockHasher;
-
-    impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
-        fn hash_input(&self, input: &In) -> Vec<u8> {
-            input.as_ref().to_vec()
-        }
-    }
-
-    impl NodeHasher for MockHasher {
-
-        type HashOutput = Vec<u8>;
-
-        fn hash_nodes<'a, L>(&'a self,
-                             iter: Nodes<'a, Vec<u8>, L>)
-                             -> Vec<u8>
-        {
-            let mut dump = Vec::new();
-            for node in iter {
-                match *node {
-                    Node::Leaf(ref ln) => {
-                        dump.push(b'>');
-                        dump.extend(ln.hash_bytes());
-                    }
-                    Node::Hash(ref hn) => {
-                        dump.extend(b"#(");
-                        dump.extend(hn.hash_bytes());
-                        dump.extend(b")");
-                    }
-                }
-            }
-            dump
-        }
-    }
 
     #[test]
     fn build_balanced_from_empty() {
@@ -211,6 +225,36 @@ mod tests {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";
             assert_eq!(hn.hash_bytes(), expected);
+        } else {
+            unreachable!()
+        }
+    }
+
+    const TEST_STRS: [&'static str; 3] = [
+        "Panda eats,",
+        "shoots,",
+        "and leaves."];
+
+    #[test]
+    fn collect_nodes_for_arbitrary_arity_tree() {
+        let iter =
+            TEST_STRS.into_par_iter().map(|input| {
+                let builder = Builder::<MockHasher, _>::new();
+                builder.into_leaf(input)
+            });
+        let builder = Builder::<MockHasher, leaf::NoData<&'static str>>::new();
+        let tree = builder.collect_nodes_from(iter).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
+            let mut peek_iter = hn.children().peekable();
+            assert!(peek_iter.peek().is_some());
+            for (i, child) in peek_iter.enumerate() {
+                if let Node::Leaf(ref ln) = *child {
+                    assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
+                } else {
+                    unreachable!()
+                }
+            }
         } else {
             unreachable!()
         }
