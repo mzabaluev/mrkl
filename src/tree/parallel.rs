@@ -170,7 +170,7 @@ where D: Hasher<L::Input>,
         self.collect_nodes_from_iter(iterable.into_par_iter())
     }
 
-    pub fn collect_nodes_from_iter<I>(
+    fn collect_nodes_from_iter<I>(
         self,
         iter: I
     ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
