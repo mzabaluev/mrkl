@@ -281,7 +281,7 @@ where D: Hasher<L::Input> + Clone,
                                 before its reported length was reached");
             self.push_leaf(item);
         } else {
-            let left_len = len.saturating_add(1) / 2;
+            let left_len = (len.saturating_add(1) / 2).next_power_of_two();
             {
                 let mut builder = Builder::from_hasher_leaf_data(
                             self.hasher.clone(),
@@ -290,6 +290,8 @@ where D: Hasher<L::Input> + Clone,
                 let left_tree = builder.complete().unwrap();
                 self.push_tree(left_tree);
             }
+            // This never overflows or comes to 0 because
+            // left_len < len for len >= 2
             let right_len = len - left_len;
             {
                 let mut builder = Builder::from_hasher_leaf_data(

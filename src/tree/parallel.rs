@@ -198,7 +198,7 @@ where D: Hasher<L::Input> + Clone + Send,
                 .expect("a parallel iterator that reported length 1 \
                          has come up empty");
         }
-        let left_len = len.saturating_add(1) / 2;
+        let left_len = (len.saturating_add(1) / 2).next_power_of_two();
         let (left, right) = iter.enumerate()
             .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(i, node)| {
                 if i < left_len {
@@ -207,6 +207,7 @@ where D: Hasher<L::Input> + Clone + Send,
                     Either::Right(node)
                 }
             });
+        // The left and right parts cannot be empty for len >= 2
         self.reduce_and_join_parts(left, right)
     }
 
