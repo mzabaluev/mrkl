@@ -159,7 +159,7 @@ macro_rules! impl_eq_for {
 macro_rules! impl_partial_eq {
     {
         $(
-            <$Rhs:ident> for $This:ident (&$self:ident, &$other:ident) {
+            <$Rhs:ident> for $This:ident: (&$self:ident, &$other:ident) {
                 $logic:expr
             }
         )+
@@ -177,7 +177,7 @@ macro_rules! impl_partial_eq {
 macro_rules! impl_hash_for {
     {
         $(
-            $This:ident (&$self:ident) {
+            $This:ident: (&$self:ident) {
                 $get_hash:expr
             }
         )+
@@ -195,27 +195,27 @@ macro_rules! impl_hash_for {
 impl_eq_for!(MerkleTree, Node, LeafNode, HashNode);
 
 impl_partial_eq! {
-    <MerkleTree> for MerkleTree (&self, &other) {
+    <MerkleTree> for MerkleTree: (&self, &other) {
         self.root() == other.root()
     }
 
-    <Node> for MerkleTree (&self, &other) {
+    <Node> for MerkleTree: (&self, &other) {
         self.root() == other
     }
 
-    <LeafNode> for MerkleTree (&self, &other) {
+    <LeafNode> for MerkleTree: (&self, &other) {
         self.root() == other
     }
 
-    <HashNode> for MerkleTree (&self, &other) {
+    <HashNode> for MerkleTree: (&self, &other) {
         self.root() == other
     }
 
-    <MerkleTree> for Node (&self, &other) {
+    <MerkleTree> for Node: (&self, &other) {
         self == other.root()
     }
 
-    <Node> for Node (&self, &other) {
+    <Node> for Node: (&self, &other) {
         match (self, other) {
             (&Node::Leaf(ref lhs), &Node::Leaf(ref rhs)) => lhs == rhs,
             (&Node::Hash(ref lhs), &Node::Hash(ref rhs)) => lhs == rhs,
@@ -223,62 +223,62 @@ impl_partial_eq! {
         }
     }
 
-    <LeafNode> for Node (&self, &other) {
+    <LeafNode> for Node: (&self, &other) {
         match *self {
             Node::Leaf(ref lhs) => lhs == other,
             _ => false
         }
     }
 
-    <HashNode> for Node (&self, &other) {
+    <HashNode> for Node: (&self, &other) {
         match *self {
             Node::Hash(ref lhs) => lhs == other,
             _ => false
         }
     }
 
-    <MerkleTree> for LeafNode (&self, &other) {
+    <MerkleTree> for LeafNode: (&self, &other) {
         self == other.root()
     }
 
-    <Node> for LeafNode (&self, &other) {
+    <Node> for LeafNode: (&self, &other) {
         match *other {
             Node::Leaf(ref rhs) => self == rhs,
             _ => false
         }
     }
 
-    <LeafNode> for LeafNode (&self, &other) {
+    <LeafNode> for LeafNode: (&self, &other) {
         self.hash() == other.hash()
     }
 
-    <MerkleTree> for HashNode (&self, &other) {
+    <MerkleTree> for HashNode: (&self, &other) {
         self == other.root()
     }
 
-    <Node> for HashNode (&self, &other) {
+    <Node> for HashNode: (&self, &other) {
         match *other {
             Node::Hash(ref rhs) => self == rhs,
             _ => false
         }
     }
 
-    <HashNode> for HashNode (&self, &other) {
+    <HashNode> for HashNode: (&self, &other) {
         self.hash() == other.hash()
     }
 }
 
 impl_hash_for! {
-    MerkleTree (&self) {
+    MerkleTree: (&self) {
         self.root().hash()
     }
-    Node (&self) {
+    Node: (&self) {
         self.hash()
     }
-    LeafNode (&self) {
+    LeafNode: (&self) {
         self.hash()
     }
-    HashNode (&self) {
+    HashNode: (&self) {
         self.hash()
     }
 }
