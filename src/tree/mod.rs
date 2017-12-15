@@ -23,6 +23,9 @@
 mod builder;
 pub use self::builder::{Builder, EmptyTree};
 
+#[cfg(feature = "parallel")]
+pub mod parallel;
+
 use std::iter::{Iterator, DoubleEndedIterator, ExactSizeIterator};
 use std::slice;
 use std::fmt;

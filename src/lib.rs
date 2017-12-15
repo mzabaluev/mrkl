@@ -21,7 +21,4 @@ pub mod tree;
 #[cfg(feature = "digest")]
 pub mod digest;
 
-#[cfg(feature = "parallel")]
-pub mod parallel;
-
 pub use tree::MerkleTree;

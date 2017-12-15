@@ -68,7 +68,7 @@ mod digest {
 
         use super::prelude::*;
 
-        use mrkl::parallel::Builder;
+        use mrkl::tree::parallel::Builder;
 
         use self::rayon::iter;
 
