@@ -16,9 +16,10 @@
 //! gisguised by `MerkleTree` or `Node`.
 //! Each of the types also implements `Eq` and `std::hash::Hash`.
 //! Practical uniqueness of the hash values in a Merkle tree is used to
-//! provide very fast implementations for the standard comparison and
+//! provide fast implementations for the standard equality comparison and
 //! hashing traits. However, if the hashing algorithm has been chosen
-//! poorly, incorrect results may occur.
+//! poorly, incorrect results may occur. Also note that leaf data never
+//! figure in hashing or equality comparisons.
 
 mod builder;
 pub use self::builder::{Builder, EmptyTree};
@@ -112,13 +113,13 @@ impl<H: AsRef<[u8]>, T> Node<H, T> {
 }
 
 impl<H: AsRef<[u8]>, T> LeafNode<H, T> {
-    /// Returns the hash value of the leaf node as a byte slice.
+    /// Returns the hash value of the node as a byte slice.
     pub fn hash_bytes(&self) -> &[u8] { self.hash.as_ref() }
 }
 
 impl<H, T> LeafNode<H, T> {
 
-    /// Returns a reference to the hash value of the leaf node.
+    /// Returns a reference to the hash value of the node.
     pub fn hash(&self) -> &H { &self.hash }
 
     /// Returns a reference to the leaf data value of the node.
@@ -126,13 +127,13 @@ impl<H, T> LeafNode<H, T> {
 }
 
 impl<H: AsRef<[u8]>, T> HashNode<H, T> {
-    /// Returns the hash value of the hash node as a byte slice.
+    /// Returns the hash value of the node as a byte slice.
     pub fn hash_bytes(&self) -> &[u8] { self.hash.as_ref() }
 }
 
 impl<H, T> HashNode<H, T> {
 
-    /// Returns a reference to the hash value of the hash node.
+    /// Returns a reference to the hash value of the node.
     pub fn hash(&self) -> &H { &self.hash }
 
     /// Borrows a child node value at the specified index.

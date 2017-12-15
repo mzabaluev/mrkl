@@ -207,8 +207,8 @@ where D: FixedOutput,
 ///
 /// The hash function implementation is defined by the first type parameter.
 /// In contrast to the more generic `DigestHasher`, the parameter type is
-/// bound by byte-oriented `digest::Input`, so any cryptographic digest
-/// function implementations implementing this trait, plus
+/// bound by bytestream-oriented `digest::Input`, so any cryptographic
+/// digest function implementations conformant to this trait, plus
 /// `digest::FixedOutput` and `Default`, are directly usable.
 ///
 /// The implementation of a concatenated hash over node's children is
