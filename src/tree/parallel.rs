@@ -6,6 +6,49 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Building Merkle trees in parallel.
+//!
+//! The `Builder` facility provided by this module uses [Rayon][rayon],
+//! a data parallelism framework, to distribute building of a Merkle tree
+//! across a pool of threads, in order to fully utilize capabilities for
+//! parallelism found in modern multi-core CPUs.
+//!
+//! [rayon]: https://crates.io/crates/rayon
+//!
+//! # Examples
+//!
+//! ```
+//! # extern crate mrkl;
+//! # extern crate rayon;
+//! # #[cfg(feature = "digest")]
+//! # extern crate sha2;
+//! #
+//! use rayon::prelude::*;
+//! use mrkl::leaf;
+//! use mrkl::tree::parallel::Builder;
+//! # #[cfg(feature = "digest")]
+//! use mrkl::digest::ByteDigestHasher;
+//! # #[cfg(feature = "digest")]
+//! use sha2::Sha256;
+//!
+//! # #[cfg(feature = "digest")]
+//! # fn main() {
+//! type Hasher = ByteDigestHasher<Sha256>;
+//!
+//! let builder = Builder::from_hasher_leaf_data(
+//!                 Hasher::new(),
+//!                 leaf::extract_with(|s: &[u8]| { s[0] }));
+//! let data: &'static [u8] = b"The quick brown fox \
+//!                             jumps over the lazy dog";
+//! let input: Vec<_> = data.chunks(10).collect();
+//! let iter = input.into_par_iter();
+//! let tree = builder.build_balanced_from(iter).unwrap();
+//! #     let _ = tree;
+//! # }
+//! # #[cfg(not(feature = "digest"))]
+//! # fn main() { }
+//! ```
+
 pub extern crate rayon;
 
 use self::rayon::prelude::*;
@@ -18,6 +61,17 @@ use tree::{MerkleTree, EmptyTree};
 use super::plumbing::BuilderNodes;
 
 
+/// A parallel Merkle tree builder utilizing a work-stealing thread pool.
+///
+/// This is a data-parallel workalike of the sequential `tree::Builder`.
+/// One difference with the sequential `Builder` is lack of any incremental
+/// `&mut self` methods to populate nodes: all methods but the most trivial
+/// `into_leaf()` require the child nodes to be constructed in a potentially
+/// parallelized way, and then the `self` instance is consumed together with
+/// the results of those computations, producing a complete Merkle tree,
+/// which, if happening in a Rayon-controlled job, can then be passed on
+/// to build another level.
+///
 #[derive(Clone, Debug, Default)]
 pub struct Builder<D, L> {
     hasher: D,
@@ -28,6 +82,9 @@ impl<D, In> Builder<D, leaf::NoData<In>>
 where D: Default,
       D: Hasher<In>
 {
+    /// Constructs a `Builder` with a default instance of the hash extractor,
+    /// and `NoData` in place of the leaf data extractor.
+    /// The constructed tree will contain only hash values in its leaf nodes.
     pub fn new() -> Self {
         Builder {
             hasher: D::default(),
@@ -40,6 +97,8 @@ impl<D, L> Builder<D, L>
 where D: Hasher<L::Input>,
       L: leaf::ExtractData
 {
+    /// Constructs a `Builder` from the given instances of the hasher
+    /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
         Builder { hasher, leaf_data_extractor }
     }
@@ -57,6 +116,12 @@ where D: Hasher<L::Input>,
             self.leaf_data_extractor)
     }
 
+    /// Consumes this instance and an input value to create a Merkle tree
+    /// consisting of a single leaf node with the hash of the input.
+    /// This method is not parallelized internally, but it is provided to
+    /// start the building from leaves up; _calls_ to this method
+    /// are normally distributed across tasks for the work-stealing
+    /// thread pool.
     pub fn into_leaf(
         self,
         input: L::Input
@@ -74,6 +139,25 @@ where D: Hasher<L::Input> + Clone + Send,
       L::Input: Send,
       L::LeafData: Send
 {
+    /// Constructs a balanced binary Merkle tree from a parallel iterator
+    /// with a known length, or anything that can be converted into such
+    /// an iterator, e.g. any `Vec` with `Send` members.
+    /// The nodes' hashes are calculated
+    /// by the hash extractor, and the leaf data values are extracted from
+    /// input data with the leaf data exractor.
+    ///
+    /// The work to construct subtrees gets recursively subdivided and
+    /// distributed across a thread pool managed by Rayon.
+    ///
+    /// This method is only available when the hash extractor and the leaf
+    /// data extractor implement `Clone`. To use a closure expression for
+    /// the leaf data extractor, ensure that it does not capture any
+    /// variables from the closure environment by passing it through the
+    /// helper function `leaf::extract_with()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when the input is empty.
     pub fn build_balanced_from<I>(
         self,
         iterable: I
@@ -146,6 +230,10 @@ where D: Hasher<L::Input>,
       D::HashOutput: Send,
       L::LeafData: Send
 {
+    /// Joins the Merkle trees produced by two closures, potentially ran in
+    /// parallel by `rayon::join()`, to produce a tree with a new root node,
+    /// with the trees returned by the closures converted to the new root's
+    /// child nodes.
     pub fn join<LF, RF>(
         self,
         left: LF,
@@ -161,6 +249,17 @@ where D: Hasher<L::Input>,
         builder.complete().unwrap()
     }
 
+    /// Collects Merkle trees produced by a potentially parallelized
+    /// iterative computation as nodes for constructing the top
+    /// of the returned tree. If the iterator returns one tree (which can
+    /// be a single-leaf tree), it is returned as the result.
+    /// Multiple trees are made immediate children of the new root node of the
+    /// returned tree.
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when the input is empty.
+    ///
     pub fn collect_nodes_from<I>(
         self,
         iterable: I
