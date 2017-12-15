@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Data types for representation and construction of Merkle trees.
+//! The data model and construction facilities for Merkle trees.
 //!
-//! Constituent parts of complete, immutable Merkle trees are represented
+//! The data of complete, immutable Merkle trees are represented
 //! by types `MerkleTree`, `Node`, `LeafNode`, and `HashNode`. All of these
 //! types are comparable for equality with other of these types where it
 //! makes sense, except that `LeafNode` and `HashNode` are not directly

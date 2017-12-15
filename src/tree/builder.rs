@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::iter::IntoIterator;
 
 
-/// The facility to construct Merkle trees with.
+/// The facility for constructing of Merkle trees.
 ///
 /// Mutable `Builder` instances can be used to construct a complete Merkle
 /// tree. There are two ways of construction: incremental by using `Builder`
@@ -68,7 +68,7 @@ where D: Hasher<In>,
       D: Default
 {
     /// Constructs a `Builder` with a default instance of the hash extractor,
-    /// and `NoData` in place of the list data extractor.
+    /// and `NoData` in place of the leaf data extractor.
     /// The constructed tree will contain only hash values in its leaf nodes.
     ///
     /// # Examples
@@ -113,7 +113,7 @@ where D: Hasher<L::Input>,
     }
 
     /// Constructs a `Builder` with capacity reserved for the given number
-    /// of nodes,
+    /// of child nodes,
     /// from the given instances of the hasher and the leaf data extractor.
     pub fn n_ary_from_hasher_leaf_data(
         n: usize,
