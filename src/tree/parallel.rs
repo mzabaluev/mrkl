@@ -40,6 +40,10 @@ impl<D, L> Builder<D, L>
 where D: Hasher<L::Input>,
       L: leaf::ExtractData
 {
+    pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
+        Builder { hasher, leaf_data_extractor }
+    }
+
     fn into_serial_builder(self) -> tree::Builder<D, L> {
         tree::Builder::from_hasher_leaf_data(
             self.hasher,
