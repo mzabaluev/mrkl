@@ -8,11 +8,17 @@
 
 use tree::Node;
 
-pub trait BuilderNodes {
-    type HashOutput;
-    type LeafData;
+use hash::NodeHasher;
+use leaf;
 
-    fn append_nodes(
-        &mut self,
-        take_from: &mut Vec<Node<Self::HashOutput, Self::LeafData>>);
+pub trait FromNodes {
+    type Hasher: NodeHasher;
+    type LeafDataExtractor: leaf::ExtractData;
+
+    fn from_nodes(
+        hasher: Self::Hasher,
+        leaf_data_extractor: Self::LeafDataExtractor,
+        nodes: Vec<Node<<Self::Hasher as NodeHasher>::HashOutput,
+                        <Self::LeafDataExtractor as leaf::ExtractData>::LeafData>>
+    ) -> Self;
 }

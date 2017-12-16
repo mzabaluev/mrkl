@@ -49,18 +49,23 @@ where D: Hasher<L::Input>,
     nodes: Vec<Node<D::HashOutput, L::LeafData>>
 }
 
-impl<D, L> plumbing::BuilderNodes for Builder<D, L>
+impl<D, L> plumbing::FromNodes for Builder<D, L>
 where D: Hasher<L::Input>,
       L: leaf::ExtractData,
 {
-    type HashOutput = D::HashOutput;
-    type LeafData = L::LeafData;
+    type Hasher = D;
+    type LeafDataExtractor = L;
 
-    fn append_nodes(
-        &mut self,
-        take_from: &mut Vec<Node<Self::HashOutput, Self::LeafData>>
-    ) {
-        self.nodes.append(take_from);
+    fn from_nodes(
+        hasher: D,
+        leaf_data_extractor: L,
+        nodes: Vec<Node<D::HashOutput, L::LeafData>>
+    ) -> Self {
+        Builder {
+            hasher,
+            leaf_data_extractor,
+            nodes
+        }
     }
 }
 

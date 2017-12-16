@@ -60,7 +60,7 @@ use hash::Hasher;
 use leaf;
 use tree;
 use tree::{MerkleTree, EmptyTree};
-use super::plumbing::BuilderNodes;
+use super::plumbing::FromNodes;
 
 
 /// A parallel Merkle tree builder utilizing a work-stealing thread pool.
@@ -262,15 +262,11 @@ where D: Hasher<L::Input>,
     ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
     where I: ParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
     {
-        // TODO: once specialization is stabilized, utilize
-        // .collect_into() with indexed iterators.
-        let mut nodes: Vec<_> =
-            iter.map(|tree| {
-                tree.root
-            })
-            .collect();
-        let mut builder = self.into_n_ary_serial_builder(nodes.len());
-        builder.append_nodes(&mut nodes);
+        let nodes = iter.map(|tree| { tree.root }).collect();
+        let builder = tree::Builder::from_nodes(
+                self.hasher,
+                self.leaf_data_extractor,
+                nodes);
         builder.finish()
     }
 }
