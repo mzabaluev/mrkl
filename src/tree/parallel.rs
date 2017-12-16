@@ -55,7 +55,6 @@
 pub extern crate rayon;
 
 use self::rayon::prelude::*;
-use self::rayon::iter::Either;
 
 use hash::Hasher;
 use leaf;
@@ -179,51 +178,35 @@ where D: Hasher<L::Input> + Clone + Send,
         if iter.len() == 0 {
             return Err(EmptyTree);
         }
-        let leaves =
+        let leaves: Vec<_> =
             iter.map_with(self.clone(), |master, input| {
                 master.clone().into_leaf(input)
-            });
+            })
+            .collect();
+        assert!(leaves.len() != 0,
+                "the parallel iterator that reported nonzero length \
+                 has come up empty");
         Ok(self.reduce(leaves))
     }
 
-    fn reduce<I>(
+    fn reduce(
         self,
-        mut iter: I
-    ) -> MerkleTree<D::HashOutput, L::LeafData>
-    where I: IndexedParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>> {
-        let len = iter.len();
+        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        let len = level_nodes.len();
         debug_assert!(len != 0);
         if len == 1 {
-            return iter.reduce_with(|_, _| {
-                    unreachable!("more than one item left in a parallel \
-                                  iterator that reported length 1")
-                })
-                .expect("a parallel iterator that reported length 1 \
-                         has come up empty");
+            return level_nodes.pop().unwrap();
         }
         let left_len = (len.saturating_add(1) / 2).next_power_of_two();
-        let (left, right) = iter.enumerate()
-            .partition_map::<Vec<_>, Vec<_>, _, _, _>(|(i, node)| {
-                if i < left_len {
-                    Either::Left(node)
-                } else {
-                    Either::Right(node)
-                }
-            });
+        let right = level_nodes.split_off(left_len);
+        let left = level_nodes;
         // The left and right parts cannot be empty for len >= 2
-        self.reduce_and_join_parts(left, right)
-    }
-
-    fn reduce_and_join_parts(
-        self,
-        left:  Vec<MerkleTree<D::HashOutput, L::LeafData>>,
-        right: Vec<MerkleTree<D::HashOutput, L::LeafData>>
-    ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let left_builder = self.clone();
         let right_builder = self.clone();
         self.join(
-            move || { left_builder.reduce(left.into_par_iter()) },
-            move || { right_builder.reduce(right.into_par_iter()) }
+            move || { left_builder.reduce(left) },
+            move || { right_builder.reduce(right) }
         )
     }
 }
