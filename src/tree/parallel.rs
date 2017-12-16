@@ -15,6 +15,9 @@
 //!
 //! [rayon]: https://crates.io/crates/rayon
 //!
+//! This module is only available if the crate has been compiled with
+//! the `parallel` feature, which is enabled by default.
+//!
 //! # Examples
 //!
 //! ```
