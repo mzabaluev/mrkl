@@ -78,8 +78,7 @@ pub struct Builder<D, L> {
 }
 
 impl<D, In> Builder<D, leaf::NoData<In>>
-where D: Default,
-      D: Hasher<In>
+where D: Hasher<In> + Default
 {
     /// Constructs a `Builder` with a default instance of the hash extractor,
     /// and `NoData` in place of the leaf data extractor.

@@ -40,25 +40,17 @@ pub struct DefaultNodeHasher<D> {
     phantom: PhantomData<D>
 }
 
-impl<D> DefaultNodeHasher<D>
-where D: Default,
-      D: Input + FixedOutput
-{
+impl<D> DefaultNodeHasher<D> {
     /// Constructs an instance of the node hasher.
     pub fn new() -> Self { DefaultNodeHasher { phantom: PhantomData } }
 }
 
-impl<D> Default for DefaultNodeHasher<D>
-where D: Default,
-      D: Input + FixedOutput
-{
+impl<D> Default for DefaultNodeHasher<D> {
     fn default() -> Self { DefaultNodeHasher::new() }
 }
 
 impl<D> Clone for DefaultNodeHasher<D> {
-    fn clone(&self) -> Self {
-        DefaultNodeHasher { phantom: PhantomData }
-    }
+    fn clone(&self) -> Self { DefaultNodeHasher::new() }
 }
 
 impl<D> Debug for DefaultNodeHasher<D> {
@@ -107,15 +99,14 @@ where D: Default,
 ///
 pub struct DigestHasher<D, Nh = DefaultNodeHasher<D>>
 where D: FixedOutput,
-      Nh: NodeHasher
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>
 {
     node_hasher: Nh,
     phantom: PhantomData<D>
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: Default,
-      D: EndianInput + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -126,8 +117,7 @@ where D: Default,
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: Default,
-      D: EndianInput + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
@@ -141,8 +131,7 @@ where D: Default,
 }
 
 impl<D, Nh> Default for DigestHasher<D, Nh>
-where D: Default,
-      D: EndianInput + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -151,7 +140,7 @@ where D: Default,
 
 impl<D, Nh> Clone for DigestHasher<D, Nh>
 where D: FixedOutput,
-      Nh: NodeHasher,
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Clone
 {
     fn clone(&self) -> Self {
@@ -164,7 +153,7 @@ where D: FixedOutput,
 
 impl<D, Nh> Debug for DigestHasher<D, Nh>
 where D: EndianInput + FixedOutput,
-      Nh: NodeHasher,
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
@@ -217,15 +206,14 @@ where D: FixedOutput,
 ///
 pub struct ByteDigestHasher<D, Nh = DefaultNodeHasher<D>>
 where D: FixedOutput,
-      Nh: NodeHasher
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     node_hasher: Nh,
     phantom: PhantomData<D>
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: Default,
-      D: Input + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -236,8 +224,7 @@ where D: Default,
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: Default,
-      D: Input + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
@@ -251,8 +238,7 @@ where D: Default,
 }
 
 impl<D, Nh> Default for ByteDigestHasher<D, Nh>
-where D: Default,
-      D: Input + FixedOutput,
+where D: FixedOutput,
       Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Default
 {
@@ -261,7 +247,7 @@ where D: Default,
 
 impl<D, Nh> Clone for ByteDigestHasher<D, Nh>
 where D: FixedOutput,
-      Nh: NodeHasher,
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Clone
 {
     fn clone(&self) -> Self {
@@ -274,7 +260,7 @@ where D: FixedOutput,
 
 impl<D, Nh> Debug for ByteDigestHasher<D, Nh>
 where D: FixedOutput,
-      Nh: NodeHasher,
+      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
       Nh: Debug
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
