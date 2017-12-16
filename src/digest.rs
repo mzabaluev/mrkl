@@ -383,7 +383,7 @@ mod tests {
         let mut builder = Builder::from_hasher_leaf_data(
                             hasher, leaf::no_data());
         builder.extend_leaves(TEST_DATA.chunks(CHUNK_SIZE));
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         let mut root_digest = Sha256::new();
         TEST_DATA.chunks(CHUNK_SIZE).map(|chunk| {
             Sha256::digest(chunk)
@@ -401,7 +401,7 @@ mod tests {
         let mut builder = Builder::from_hasher_leaf_data(
                             hasher, leaf::no_data());
         builder.extend_leaves(test_input.iter());
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         let mut root_digest = Sha256::new();
         test_input.iter().map(|v| {
             Sha256::digest(&[0, *v as u8])

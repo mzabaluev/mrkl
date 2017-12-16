@@ -13,13 +13,13 @@ gets stored inside leaf nodes.
   new levels on top of the sealed tree root. An application design that needs
   to repeatedly recalculate a Merkle tree over variable content has
   questionable usefulness and efficiency. Therefore, the data structures
-  representing complete trees can be made immutable.
+  representing fully constructed trees can be made immutable.
 
-* Merkle trees are not generally used to hold the hashed input data.
+* Merkle trees are not generally used to contain the hashed input data.
   However, some information about the input may need to be stored in the
   leaf nodes. Therefore, the design should provide flexible choices for
-  leaf data extraction, including trees without leaf data and data-owning
-  trees.
+  leaf data extraction, including trees without leaf data and
+  trees taking ownership of the input as leaf data.
 
 * The application should have a choice in the hashing algorithm that is
   not restricted to a particular digest API. The Rust Crypto project's API,
@@ -34,9 +34,9 @@ gets stored inside leaf nodes.
   implementation using a work-stealing thread pool should be provided
   as an optional feature.
 
-## Implementation notes
+## Design notes
 
-The design uses the builder pattern to separate complete Merkle trees,
+The design uses the builder pattern to separate fully built Merkle trees,
 which are immutable, from tree nodes under construction that are
 encapsulated by instances of `tree::Builder`.
 
@@ -52,9 +52,9 @@ yet.
 The input to make a leaf node cannot yet be provided incrementally. There is
 an idea how to implement this in an elegant way.
 
-An extension can be provided to build trees from input streams where
-hashed data is delivered in a sub-band channel alongside leaf-stored values
-(like in the item values of `std::iter::Enumerate`).
+An extension can be provided to build trees from iterated input where
+data to hash is delivered multiplexed alongside the values to store as
+leaf data (like in the item values of `std::iter::Enumerate`).
 
 ## License
 

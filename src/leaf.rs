@@ -99,12 +99,12 @@ impl<T> ExtractData for Owned<T> {
 /// This is a type system fix for using arbitrary `Fn` closures to extract
 /// leaf node data from input values.
 ///
-/// Note that usage of this extractor precludes building trees with
-/// the method `Builder::build_balanced_from()`, which imposes a `Clone`
-/// bound on the extractor. Use the `extract_with()` helper function
-/// provided by this module to extract data with plain functions,
-/// including closure expressions without variable captures
-/// that can be converted to an `fn` type.
+/// This extractor cannot be used for building trees with the
+/// `complete_tree_from()` method of both sequential and parallel
+/// `Builder` types, since these impose a `Clone` bound on the extractor.
+/// Use the `extract_with()` helper function provided by this module
+/// to extract leaf data with plain functions, including closure expressions
+/// without variable captures that can be converted to an `fn` type.
 pub struct ExtractFn<In, F> {
     extractor: F,
     phantom: PhantomData<In>

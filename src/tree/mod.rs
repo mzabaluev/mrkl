@@ -8,7 +8,7 @@
 
 //! The data model and construction facilities for Merkle trees.
 //!
-//! The data of complete, immutable Merkle trees are represented
+//! The data of constructed, immutable Merkle trees are represented
 //! by types `MerkleTree`, `Node`, `LeafNode`, and `HashNode`. All of these
 //! types are comparable for equality with other of these types where it
 //! makes sense, except that `LeafNode` and `HashNode` are not directly
@@ -38,9 +38,9 @@ use std::fmt;
 use std::fmt::Debug;
 use std::hash as std_hash;
 
-/// A complete Merkle tree.
+/// A Merkle tree.
 ///
-/// Values of this type represent complete Merkle trees.
+/// Values of this type represent fully constructed Merkle trees.
 /// A valid tree either has a single leaf node as the root node,
 /// or has a hierarchy of nodes terminating with leaf nodes and
 /// with hash-only nodes at levels above leaves.

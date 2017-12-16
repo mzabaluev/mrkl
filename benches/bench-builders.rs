@@ -51,12 +51,12 @@ mod digest {
         }
 
         #[bench]
-        fn build_balanced_100x4k(b: &mut Bencher) {
+        fn complete_tree_100x4k(b: &mut Bencher) {
             let block: &[u8] = &[0u8; 4 * 1024];
             let seq: Vec<_> = iter::repeat(block).take(100).collect();
             b.iter(|| {
                 let builder = Builder::<Hasher, _>::new();
-                let tree = builder.build_balanced_from(&seq).unwrap();
+                let tree = builder.complete_tree_from(&seq).unwrap();
                 black_box(tree);
             })
         }
@@ -73,12 +73,12 @@ mod digest {
         use self::rayon::iter;
 
         #[bench]
-        fn build_balanced_100x4k(b: &mut Bencher) {
+        fn complete_tree_100x4k(b: &mut Bencher) {
             let block: &[u8] = &[0u8; 4 * 1024];
             b.iter(|| {
                 let iter = iter::repeatn(block, 100);
                 let builder = Builder::<Hasher, _>::new();
-                let tree = builder.build_balanced_from(iter).unwrap();
+                let tree = builder.complete_tree_from(iter).unwrap();
                 black_box(tree);
             })
         }

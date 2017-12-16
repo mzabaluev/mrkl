@@ -42,7 +42,7 @@
 //!                             jumps over the lazy dog";
 //! let input: Vec<_> = data.chunks(10).collect();
 //! let iter = input.into_par_iter();
-//! let tree = builder.build_balanced_from(iter).unwrap();
+//! let tree = builder.complete_tree_from(iter).unwrap();
 //! #     let _ = tree;
 //! # }
 //! # #[cfg(not(feature = "digest"))]
@@ -67,11 +67,10 @@ use super::plumbing::BuilderNodes;
 /// One difference with the sequential `Builder` is lack of any incremental
 /// `&mut self` methods to populate nodes: all methods but the most trivial
 /// `into_leaf()` require the child nodes to be constructed in a potentially
-/// parallelized way, and then the `self` instance is consumed together with
-/// the results of those computations, producing a complete Merkle tree,
-/// which, if happening in a Rayon-controlled job, can then be passed on
-/// to build another level.
-///
+/// parallelized way. The `self` instance is consumed together with
+/// the results of those computations to produce the final Merkle tree,
+/// which, if happening in a Rayon-controlled job,
+/// can then be passed on to build another level.
 #[derive(Clone, Debug, Default)]
 pub struct Builder<D, L> {
     hasher: D,
@@ -128,7 +127,7 @@ where D: Hasher<L::Input>,
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let mut builder = self.into_n_ary_serial_builder(1);
         builder.push_leaf(input);
-        builder.complete().unwrap()
+        builder.finish().unwrap()
     }
 }
 
@@ -139,12 +138,14 @@ where D: Hasher<L::Input> + Clone + Send,
       L::Input: Send,
       L::LeafData: Send
 {
-    /// Constructs a balanced binary Merkle tree from a parallel iterator
-    /// with a known length, or anything that can be converted into such
-    /// an iterator, e.g. any `Vec` with `Send` members.
-    /// The nodes' hashes are calculated
-    /// by the hash extractor, and the leaf data values are extracted from
-    /// input data with the leaf data exractor.
+    /// Constructs a [complete binary][nist] Merkle tree from a parallel
+    /// iterator with a known length, or anything that can be converted
+    /// into such an iterator, e.g. any `Vec` with `Send` members.
+    /// The nodes' hashes are calculated by the hash extractor, and
+    /// the leaf data values are extracted from input data with the
+    /// leaf data exractor.
+    ///
+    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// The work to construct subtrees gets recursively subdivided and
     /// distributed across a thread pool managed by Rayon.
@@ -158,17 +159,17 @@ where D: Hasher<L::Input> + Clone + Send,
     /// # Errors
     ///
     /// Returns the `EmptyTree` error when the input is empty.
-    pub fn build_balanced_from<I>(
+    pub fn complete_tree_from<I>(
         self,
         iterable: I
     ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
     where I: IntoParallelIterator<Item = L::Input>,
           I::Iter: IndexedParallelIterator,
     {
-        self.build_balanced_from_iter(iterable.into_par_iter())
+        self.complete_tree_from_iter(iterable.into_par_iter())
     }
 
-    fn build_balanced_from_iter<I>(
+    fn complete_tree_from_iter<I>(
         self,
         mut iter: I
     ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
@@ -247,7 +248,7 @@ where D: Hasher<L::Input>,
         let mut builder = self.into_serial_builder();
         builder.push_tree(left_tree);
         builder.push_tree(right_tree);
-        builder.complete().unwrap()
+        builder.finish().unwrap()
     }
 
     /// Collects Merkle trees produced by a potentially parallelized
@@ -285,7 +286,7 @@ where D: Hasher<L::Input>,
             .collect();
         let mut builder = self.into_n_ary_serial_builder(nodes.len());
         builder.append_nodes(&mut nodes);
-        builder.complete()
+        builder.finish()
     }
 }
 
@@ -303,16 +304,16 @@ mod tests {
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
     #[test]
-    fn build_balanced_from_empty() {
+    fn complete_tree_from_empty() {
         let builder = Builder::<MockHasher, _>::new();
-        builder.build_balanced_from(iter::empty::<[u8; 1]>()).unwrap_err();
+        builder.complete_tree_from(iter::empty::<[u8; 1]>()).unwrap_err();
     }
 
     #[test]
-    fn build_balanced_leaf() {
+    fn complete_leaf() {
         let builder = Builder::<MockHasher, _>::new();
         let iter = iter::repeatn(TEST_DATA, 1);
-        let tree = builder.build_balanced_from(iter).unwrap();
+        let tree = builder.complete_tree_from(iter).unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), TEST_DATA);
         } else {
@@ -321,10 +322,10 @@ mod tests {
     }
 
     #[test]
-    fn build_balanced_tree() {
+    fn complete_tree() {
         let builder = Builder::<MockHasher, _>::new();
         let data: Vec<_> = TEST_DATA.chunks(15).collect();
-        let tree = builder.build_balanced_from(data).unwrap();
+        let tree = builder.complete_tree_from(data).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";

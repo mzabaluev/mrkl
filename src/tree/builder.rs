@@ -19,18 +19,19 @@ use std::iter::IntoIterator;
 
 /// The facility for constructing of Merkle trees.
 ///
-/// Mutable `Builder` instances can be used to construct a complete Merkle
+/// Mutable `Builder` instances can be used to construct a Merkle
 /// tree. There are two ways of construction: incremental by using `Builder`
 /// instances to construct and compose trees, or by using the convenience
-/// method `build_balanced_from()` to create a balanced binary tree out of a
+/// method `complete_tree_from()` to create a complete binary tree out of a
 /// sequence of input values.
 ///
 /// When used in the incremental fashion, a `Builder` contains a
-/// sequence of nodes which can be populated in order, to become one layer
-/// – either a single leaf node, or the nodes immediately under the
-/// newly calculated root node – of a complete Merkle tree created with
-/// the method `complete()`. Either input data values or complete subtrees
-/// can be consumed to append leaf or hash nodes, respectively.
+/// sequence of nodes which can be populated in order, to become one level
+/// – either the single root node, or the children of the
+/// newly calculated root node – of the Merkle tree created with
+/// the method `finish()`. Either input data values or subtrees already
+/// constructed from input data can be consumed to append leaf or hash
+/// nodes, respectively.
 ///
 /// `Builder` has two type parameters: the hash exractor implementing trait
 /// `hash::Hasher`, and the leaf data extractor implementing trait
@@ -164,15 +165,17 @@ where D: Hasher<L::Input>,
         Nodes(self.nodes.iter())
     }
 
-    /// Constructs a complete MerkleTree from the populated `Builder`,
-    /// consuming it in the process.
+    /// Constructs the final `MerkleTree` from the populated `Builder`
+    /// instance.
     ///
     /// The tree constructed will depend on the number of nodes this
     /// instance has been populated with. From a single leaf node, a
     /// single-level tree is constructed containing the leaf node as
-    /// root. From multiple nodes, a tree is constructed by creating a
+    /// the root. If a single tree has been added as a hash node,
+    /// an equivalent tree is returned.
+    /// From multiple nodes, a tree is constructed by creating a
     /// root hash node as the parent of the sequence of the populated nodes,
-    /// hashed with the hash extractor's `hash_nodes()` method to
+    /// hashed with the `hash_nodes()` method of the hash extractor to
     /// obtain the root hash.
     ///
     /// # Errors
@@ -180,8 +183,9 @@ where D: Hasher<L::Input>,
     /// Returns the `EmptyTree` error when called on an unpopulated
     /// `Builder`.
     ///
-    pub fn complete(mut self)
-                -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    pub fn finish(
+        mut self
+    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
     {
         match self.nodes.len() {
             0 => Err(EmptyTree),
@@ -202,10 +206,12 @@ impl<D, L> Builder<D, L>
 where D: Hasher<L::Input> + Clone,
       L: leaf::ExtractData + Clone,
 {
-    /// Constructs a balanced binary Merkle tree from a sequence of
+    /// Constructs a [complete binary][nist] Merkle tree from a sequence of
     /// input values with a known length. The nodes' hashes are calculated
     /// by the hash extractor, and the leaf data values are extracted from
     /// input data with the leaf data exractor.
+    ///
+    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// This method is only available when the hash extractor and the leaf
     /// data extractor implement `Clone`. To use a closure expression for
@@ -245,13 +251,13 @@ where D: Hasher<L::Input> + Clone,
     ///                 leaf::extract_with(|s: &[u8]| { s[0] }));
     /// let input: &'static [u8] = b"The quick brown fox \
     ///                              jumps over the lazy dog";
-    /// let tree = builder.build_balanced_from(input.chunks(10)).unwrap();
+    /// let tree = builder.complete_tree_from(input.chunks(10)).unwrap();
     /// #     let _ = tree;
     /// # }
     /// # #[cfg(not(feature = "digest"))]
     /// # fn main() { }
     /// ```
-    pub fn build_balanced_from<I>(
+    pub fn complete_tree_from<I>(
         mut self,
         iterable: I
     ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
@@ -259,19 +265,19 @@ where D: Hasher<L::Input> + Clone,
           I::IntoIter: ExactSizeIterator
     {
         assert!(self.nodes.is_empty(),
-                "build_balanced_from() called on a populated Builder");
+                "complete_tree_from() called on a populated Builder");
         let mut iter = iterable.into_iter();
         let len = iter.len();
         if len == 0 {
             return Err(EmptyTree);
         }
-        self.populate_balanced_from_iter(&mut iter, len);
+        self.populate_complete_from_iter(&mut iter, len);
         debug_assert!(iter.next().is_none(),
                       "iterator has not been exhausted after reported length");
-        self.complete()
+        self.finish()
     }
 
-    fn populate_balanced_from_iter<I>(&mut self, iter: &mut I, len: usize)
+    fn populate_complete_from_iter<I>(&mut self, iter: &mut I, len: usize)
     where I: Iterator<Item = L::Input>
     {
         debug_assert!(len != 0);
@@ -286,8 +292,8 @@ where D: Hasher<L::Input> + Clone,
                 let mut builder = Builder::from_hasher_leaf_data(
                             self.hasher.clone(),
                             self.leaf_data_extractor.clone());
-                builder.populate_balanced_from_iter(iter, left_len);
-                let left_tree = builder.complete().unwrap();
+                builder.populate_complete_from_iter(iter, left_len);
+                let left_tree = builder.finish().unwrap();
                 self.push_tree(left_tree);
             }
             // This never overflows or comes to 0 because
@@ -297,8 +303,8 @@ where D: Hasher<L::Input> + Clone,
                 let mut builder = Builder::from_hasher_leaf_data(
                             self.hasher.clone(),
                             self.leaf_data_extractor.clone());
-                builder.populate_balanced_from_iter(iter, right_len);
-                let right_tree = builder.complete().unwrap();
+                builder.populate_complete_from_iter(iter, right_len);
+                let right_tree = builder.finish().unwrap();
                 self.push_tree(right_tree);
             }
         }
@@ -340,7 +346,7 @@ mod tests {
 
         fn daft() -> Result<MerkleTree<Vec<u8>, ()>, EmptyTree> {
             let builder = Builder::<MockHasher, leaf::NoData<String>>::new();
-            let _ = builder.complete()?;
+            let _ = builder.finish()?;
             unreachable!()
         }
 
@@ -354,7 +360,7 @@ mod tests {
     fn builder_no_data_fixed_size_array() {
         let mut builder = Builder::<MockHasher, _>::new();
         builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         assert_eq!(tree.root().hash_bytes(), &[1, 2, 3, 4]);
     }
 
@@ -364,7 +370,7 @@ mod tests {
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::owned());
         builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[1, 2, 3, 4]);
             assert_eq!(ln.data(), &[1, 2, 3, 4]);
@@ -374,12 +380,12 @@ mod tests {
     }
 
     #[test]
-    fn builder_leaf_data_extract_with_plain_fn() {
+    fn builder_leaf_extract_with_plain_fn() {
         let hasher = MockHasher::default();
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: [u8; 4]| { s.len() }));
         builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
             assert_eq!(*ln.data(), 4);
@@ -389,14 +395,14 @@ mod tests {
     }
 
     #[test]
-    fn builder_leaf_data_extract_with_closure() {
+    fn builder_leaf_extract_with_closure() {
         let hasher = MockHasher::default();
         let off = 42;
         let mut builder = Builder::from_hasher_leaf_data(
                 hasher,
                 leaf::ExtractFn::with(|s: [u8; 4]| { s.len() + off }));
         builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
             assert_eq!(*ln.data(), 46);
@@ -410,7 +416,7 @@ mod tests {
         let v = Vec::from(TEST_DATA);
         let mut builder = Builder::<MockHasher, leaf::NoData<&[u8]>>::new();
         builder.push_leaf(&v[..]);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         assert_eq!(tree.root().hash_bytes(), TEST_DATA);
     }
 
@@ -421,7 +427,7 @@ mod tests {
                 hasher, leaf::extract_with(|s: &str| { s.to_string() }));
         builder.push_leaf("eats shoots");
         builder.push_leaf("and leaves");
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">eats shoots>and leaves");
             let child = hn.child_at(0);
@@ -451,7 +457,7 @@ mod tests {
                 hasher, leaf::no_data());
         builder.push_leaf("eats shoots");
         builder.push_leaf("and leaves");
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let _child = hn.child_at(2);
         } else {
@@ -472,7 +478,7 @@ mod tests {
         for s in TEST_STRS.iter() {
             builder.push_leaf(s);
         }
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
             for (i, child) in hn.children().enumerate() {
@@ -492,7 +498,7 @@ mod tests {
     fn extend_leaves_for_arbitrary_arity_tree() {
         let mut builder = Builder::<MockHasher, _>::new();
         builder.extend_leaves(TEST_STRS.iter());
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
             let mut peek_iter = hn.children().peekable();
@@ -518,13 +524,13 @@ mod tests {
                 leaf::extract_with(leaf_extractor));
         builder.push_leaf("shoots,");
         builder.push_leaf("and leaves.");
-        let subtree = builder.complete().unwrap();
+        let subtree = builder.finish().unwrap();
         let mut builder = Builder::from_hasher_leaf_data(
                 MockHasher::default(),
                 leaf::extract_with(leaf_extractor));
         builder.push_leaf("Panda eats,");
         builder.push_tree(subtree);
-        let tree = builder.complete().unwrap();
+        let tree = builder.finish().unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b">Panda eats,#(>shoots,>and leaves.)";
             assert_eq!(hn.hash_bytes(), expected);
@@ -561,24 +567,24 @@ mod tests {
     }
 
     #[test]
-    fn build_balanced_from_empty() {
+    fn complete_tree_from_empty() {
         use std::iter::empty;
         let builder = Builder::<MockHasher, _>::new();
-        builder.build_balanced_from(empty::<[u8; 1]>()).unwrap_err();
+        builder.complete_tree_from(empty::<[u8; 1]>()).unwrap_err();
     }
 
     #[test]
     #[should_panic]
-    fn build_balanced_on_populated_builder() {
+    fn complete_tree_from_panics_on_populated_builder() {
         let mut builder = Builder::<MockHasher, _>::new();
         builder.push_leaf(&[0u8][..]);
-        let _ = builder.build_balanced_from(TEST_DATA.chunks(1));
+        let _ = builder.complete_tree_from(TEST_DATA.chunks(1));
     }
 
     #[test]
-    fn build_balanced_no_leaf_data() {
+    fn complete_tree_with_no_leaf_data() {
         let builder = Builder::<MockHasher, _>::new();
-        let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
+        let tree = builder.complete_tree_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";
@@ -589,12 +595,12 @@ mod tests {
     }
 
     #[test]
-    fn build_balanced_owned_leaf_data() {
+    fn complete_tree_with_owned_leaf_data() {
         let builder = Builder::from_hasher_leaf_data(
                 MockHasher::default(),
                 leaf::owned::<Vec<u8>>());
         let iter = TEST_DATA.chunks(15).map(|s| { s.to_vec() });
-        let tree = builder.build_balanced_from(iter).unwrap();
+        let tree = builder.complete_tree_from(iter).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";
@@ -611,11 +617,11 @@ mod tests {
     }
 
     #[test]
-    fn build_balanced_leaf_data_extract_with() {
+    fn complete_tree_using_leaf_extract_with() {
         let builder = Builder::from_hasher_leaf_data(
                 MockHasher::default(),
                 leaf::extract_with(|s: &[u8]| { s[1] }));
-        let tree = builder.build_balanced_from(TEST_DATA.chunks(15)).unwrap();
+        let tree = builder.complete_tree_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
                                     > the lazy dog";
