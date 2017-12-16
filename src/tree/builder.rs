@@ -17,7 +17,7 @@ use std::fmt::Display;
 use std::iter::IntoIterator;
 
 
-/// The facility for constructing of Merkle trees.
+/// The facility for constructing Merkle trees.
 ///
 /// Mutable `Builder` instances can be used to construct a Merkle
 /// tree. There are two ways of construction: incremental by using `Builder`
