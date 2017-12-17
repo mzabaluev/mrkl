@@ -36,9 +36,9 @@ gets stored inside leaf nodes.
 
 ## Design notes
 
-The design uses the builder pattern to separate fully built Merkle trees,
-which are immutable, from tree nodes under construction that are
-encapsulated by instances of `tree::Builder`.
+The design uses the builder pattern to separate the Merkle tree data model,
+which is immutable, from various construction facilities that are represented
+by `tree::Builder`, `tree::parallel::Builder`, and related types.
 
 ## Future additions
 

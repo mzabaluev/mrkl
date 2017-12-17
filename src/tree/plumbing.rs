@@ -6,19 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use tree::Node;
-
-use hash::NodeHasher;
-use leaf;
+use tree::{BuildResult, Node};
 
 pub trait FromNodes {
-    type Hasher: NodeHasher;
-    type LeafDataExtractor: leaf::ExtractData;
+    type HashOutput;
+    type LeafData;
 
-    fn from_nodes(
-        hasher: Self::Hasher,
-        leaf_data_extractor: Self::LeafDataExtractor,
-        nodes: Vec<Node<<Self::Hasher as NodeHasher>::HashOutput,
-                        <Self::LeafDataExtractor as leaf::ExtractData>::LeafData>>
-    ) -> Self;
+    fn tree_from_nodes(
+        &self,
+        nodes: Vec<Node<Self::HashOutput, Self::LeafData>>
+    ) -> BuildResult<Self::HashOutput, Self::LeafData>;
 }

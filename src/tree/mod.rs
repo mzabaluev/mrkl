@@ -22,7 +22,7 @@
 //! figure in hashing or equality comparisons.
 
 mod builder;
-pub use self::builder::{Builder, EmptyTree};
+pub use self::builder::{Builder, BuildResult, EmptyTree};
 
 #[cfg(feature = "parallel")]
 pub mod parallel;
@@ -59,11 +59,11 @@ pub struct MerkleTree<H, T> {
 pub enum Node<H, T> {
     /// A leaf node value.
     Leaf(LeafNode<H, T>),
-    /// A hash node value with child nodes.
+    /// An internal node value.
     Hash(HashNode<H, T>)
 }
 
-/// A value representing a leaf node.
+/// A value representing a leaf node in a Merkle tree.
 ///
 /// `LeafNode` values can be obtained by destructuring `Node`.
 #[derive(Debug)]
@@ -72,7 +72,7 @@ pub struct LeafNode<H, T> {
     data: T
 }
 
-/// A value representing a node containing the hash of its child nodes.
+/// A value representing an internal node in Merkle tree.
 ///
 /// `HashNode` values can be obtained by destructuring `Node`.
 #[derive(Debug)]

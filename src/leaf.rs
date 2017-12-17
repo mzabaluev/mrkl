@@ -100,8 +100,8 @@ impl<T> ExtractData for Owned<T> {
 /// leaf node data from input values.
 ///
 /// This extractor cannot be used for building trees with the
-/// `complete_tree_from()` method of both sequential and parallel
-/// `Builder` types, since these impose a `Clone` bound on the extractor.
+/// methods `complete_tree_from()` and `full_tree_from()` of
+/// `tree::parallel::Builder`, as they impose a `Clone` bound on the extractor.
 /// Use the `extract_with()` helper function provided by this module
 /// to extract leaf data with plain functions, including closure expressions
 /// without variable captures that can be converted to an `fn` type.
@@ -158,15 +158,16 @@ pub fn owned<In>() -> Owned<In> {
 
 /// A helper function to create function-based leaf data extractors.
 ///
-/// Usage of this function ensures that the return value can be used
-/// to build trees with `Builder::build_balanced_with()`. A closure
-/// expression passed as the parameter is converted to an unnamed
+/// Usage of this function ensures that the returned function pointer is
+/// cloneable.
+/// A closure expression passed as the parameter is converted to an unnamed
 /// plain function.
 ///
-/// For incrementally built trees, the `ExtractFn` extractor type is
+/// For sequentially built trees, the `ExtractFn` extractor type is
 /// available that wraps arbitrary `Fn` closures.
-pub fn extract_with<In, Out>(extractor: fn(In) -> Out)
-                             -> fn(In) -> Out {
+pub fn extract_with<In, Out>(
+    extractor: fn(In) -> Out
+) -> fn(In) -> Out {
     extractor
 }
 

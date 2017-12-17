@@ -37,7 +37,10 @@ pub trait NodeHasher {
     /// Hash a sequence of child nodes to produce the parent hash value.
     ///
     /// This method is used to calculate hash values of the non-leaf nodes
-    /// in the Merkle tree under construction.
+    /// in the Merkle tree under construction. The iterator retrieves at least
+    /// one node. When it's exactly one, this is likely to be the special
+    /// case described in the documentation to
+    /// `Builder::chain_lone_child()` method.
     ///
     /// The type parameter represents arbitrary list node data and should
     /// be ignored for all purposes.

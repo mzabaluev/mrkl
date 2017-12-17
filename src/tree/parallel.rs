@@ -10,8 +10,8 @@
 //!
 //! The `Builder` facility provided by this module uses [Rayon][rayon],
 //! a data parallelism framework, to distribute building of a Merkle tree
-//! across a pool of threads, in order to fully utilize capabilities for
-//! parallelism found in modern multi-core CPUs.
+//! across a pool of work-stealing threads, in order to fully utilize
+//! capabilities for parallelism found in modern multi-core CPUs.
 //!
 //! [rayon]: https://crates.io/crates/rayon
 //!
@@ -59,24 +59,23 @@ use self::rayon::prelude::*;
 use hash::Hasher;
 use leaf;
 use tree;
-use tree::{MerkleTree, EmptyTree};
+use tree::{MerkleTree, EmptyTree, BuildResult};
 use super::plumbing::FromNodes;
 
 
 /// A parallel Merkle tree builder utilizing a work-stealing thread pool.
 ///
 /// This is a data-parallel workalike of the sequential `tree::Builder`.
-/// One difference with the sequential `Builder` is lack of any incremental
-/// `&mut self` methods to populate nodes: all methods but the most trivial
-/// `into_leaf()` require the child nodes to be constructed in a potentially
-/// parallelized way. The `self` instance is consumed together with
-/// the results of those computations to produce the final Merkle tree,
-/// which, if happening in a Rayon-controlled job,
-/// can then be passed on to build another level.
+/// Where the sequential `Builder` works with tree instances and sequential
+/// iterators, this API uses thread-safe closures and Rayon's parallel
+/// iterators to obtain children for a new tree's root in a potentially
+/// parallelized way.
 #[derive(Clone, Debug, Default)]
-pub struct Builder<D, L> {
-    hasher: D,
-    leaf_data_extractor: L
+pub struct Builder<D, L>
+where D: Hasher<L::Input>,
+      L: leaf::ExtractData,
+{
+    inner: tree::Builder<D, L>
 }
 
 impl<D, In> Builder<D, leaf::NoData<In>>
@@ -86,10 +85,7 @@ where D: Hasher<In> + Default
     /// and `NoData` in place of the leaf data extractor.
     /// The constructed tree will contain only hash values in its leaf nodes.
     pub fn new() -> Self {
-        Builder {
-            hasher: D::default(),
-            leaf_data_extractor: leaf::no_data()
-        }
+        Builder { inner: tree::Builder::new() }
     }
 }
 
@@ -100,35 +96,41 @@ where D: Hasher<L::Input>,
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
-        Builder { hasher, leaf_data_extractor }
+        let inner = tree::Builder::from_hasher_leaf_data(
+                hasher, leaf_data_extractor);
+        Builder { inner }
     }
 
-    fn into_serial_builder(self) -> tree::Builder<D, L> {
-        tree::Builder::from_hasher_leaf_data(
-            self.hasher,
-            self.leaf_data_extractor)
-    }
-
-    fn into_n_ary_serial_builder(self, n: usize) -> tree::Builder<D, L> {
-        tree::Builder::n_ary_from_hasher_leaf_data(
-            n,
-            self.hasher,
-            self.leaf_data_extractor)
-    }
-
-    /// Consumes this instance and an input value to create a Merkle tree
-    /// consisting of a single leaf node with the hash of the input.
+    /// Transforms input data into a tree consisting of a single leaf node.
+    ///
     /// This method is not parallelized internally, but it is provided to
     /// start the building from leaves up; _calls_ to this method
     /// are normally distributed across tasks for the work-stealing
     /// thread pool.
-    pub fn into_leaf(
-        self,
+    /// The hash value for the root leaf node is calculated by the hash
+    /// extractor, and the leaf data value is obtained by the leaf data
+    /// extractor used by this `Builder`.
+    pub fn make_leaf(
+        &self,
         input: L::Input
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
-        let mut builder = self.into_n_ary_serial_builder(1);
-        builder.push_leaf(input);
-        builder.finish().unwrap()
+        self.inner.make_leaf(input)
+    }
+
+    /// Constructs a Merkle tree with the passed subtree as the single
+    /// child of the root node, usually considered to be the leftmost child
+    /// in an _n_-ary tree.
+    ///
+    /// This method can be used to deal with the unpaired
+    /// rightmost node in a level of the tree under construction, when
+    /// equal path height to all leaf nodes needs to be maintained.
+    /// The `hash_nodes()` method of the hash extractor receives the child
+    /// as the single element in the `Nodes` iterator.
+    pub fn chain_lone_child(
+        &self,
+        child: MerkleTree<D::HashOutput, L::LeafData>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        self.inner.chain_lone_child(child)
     }
 }
 
@@ -139,17 +141,36 @@ where D: Hasher<L::Input> + Clone + Send,
       L::Input: Send,
       L::LeafData: Send
 {
-    /// Constructs a [complete binary][nist] Merkle tree from a parallel
+    /// Constructs a left-filled binary Merkle tree from a parallel
     /// iterator with a known length, or anything that can be converted
     /// into such an iterator, e.g. any `Vec` with `Send` members.
     /// The nodes' hashes are calculated by the hash extractor, and
     /// the leaf data values are extracted from input data with the
     /// leaf data exractor.
     ///
+    /// The constructed tree has the following properties: the left subtree
+    /// of the root node is a perfect binary tree, all leaf nodes are on the
+    /// same level (i.e. have the same depth), and nodes on every tree level
+    /// are packed to the left. This means that the rightmost internal node
+    /// on any level under root may have only a single child that is considered
+    /// to be the left child. This layout is a subgraph to the
+    /// [complete binary tree][nist] with the same leaf nodes at the deepest
+    /// level; higher-level leaf nodes of the complete tree do not carry
+    /// a practical meaning in this representation of the Merkle tree
+    /// and are not present in the data model, nor any internal nodes that
+    /// would have only such leaf nodes as descendants.
+    ///
     /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// The work to construct subtrees gets recursively subdivided and
-    /// distributed across a thread pool managed by Rayon.
+    /// distributed across a thread pool managed by Rayon. Construction
+    /// of the leaf nodes is also parallelized across the input sequence.
+    /// The implementation allocates an amount of memory that can be
+    /// approximated as `s ⋅ n ⋅ (1 + (⌈log₂(n)⌉ - 1) / 2)`, where `n`
+    /// is the length of the input sequence, and `s` is the size of a tree
+    /// node which is somewhat larger than the sum of sizes of a hash value
+    /// and a leaf data value. Part of the allocated memory gets recycled
+    /// in the created tree, which takes `s ⋅ n ⋅ 2 - 1`.
     ///
     /// This method is only available when the hash extractor and the leaf
     /// data extractor implement `Clone`. To use a closure expression for
@@ -160,10 +181,11 @@ where D: Hasher<L::Input> + Clone + Send,
     /// # Errors
     ///
     /// Returns the `EmptyTree` error when the input is empty.
+    ///
     pub fn complete_tree_from<I>(
-        self,
+        &self,
         iterable: I
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    ) -> BuildResult<D::HashOutput, L::LeafData>
     where I: IntoParallelIterator<Item = L::Input>,
           I::Iter: IndexedParallelIterator,
     {
@@ -171,43 +193,51 @@ where D: Hasher<L::Input> + Clone + Send,
     }
 
     fn complete_tree_from_iter<I>(
-        self,
+        &self,
         mut iter: I
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    ) -> BuildResult<D::HashOutput, L::LeafData>
     where I: IndexedParallelIterator<Item = L::Input> {
         if iter.len() == 0 {
             return Err(EmptyTree);
         }
         let leaves: Vec<_> =
             iter.map_with(self.clone(), |master, input| {
-                master.clone().into_leaf(input)
+                master.make_leaf(input)
             })
             .collect();
         assert!(leaves.len() != 0,
                 "the parallel iterator that reported nonzero length \
                  has come up empty");
-        Ok(self.reduce(leaves))
+        let perfect_len = leaves.len().checked_next_power_of_two().unwrap();
+        Ok(self.reduce(leaves, perfect_len))
     }
 
     fn reduce(
-        self,
-        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>
+        &self,
+        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>,
+        perfect_len: usize
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let len = level_nodes.len();
         debug_assert!(len != 0);
-        if len == 1 {
-            return level_nodes.pop().unwrap();
+        let left_len = perfect_len / 2;
+        if len <= left_len {
+            // We're going to have no right subtree on this node.
+            // And it's still an internal node because this is never true
+            // when perfect_len == 1.
+            let subtree = self.reduce(level_nodes, left_len);
+            self.chain_lone_child(subtree)
+        } else if len == 1 {
+            level_nodes.pop().unwrap()
+        } else {
+            let right = level_nodes.split_off(left_len);
+            let left = level_nodes;
+            let left_builder = self.clone();
+            let right_builder = self.clone();
+            self.join(
+                move || { left_builder.reduce(left, left_len) },
+                move || { right_builder.reduce(right, left_len) }
+            )
         }
-        let left_len = (len.saturating_add(1) / 2).next_power_of_two();
-        let right = level_nodes.split_off(left_len);
-        let left = level_nodes;
-        // The left and right parts cannot be empty for len >= 2
-        let left_builder = self.clone();
-        let right_builder = self.clone();
-        self.join(
-            move || { left_builder.reduce(left) },
-            move || { right_builder.reduce(right) }
-        )
     }
 }
 
@@ -221,8 +251,11 @@ where D: Hasher<L::Input>,
     /// parallel by `rayon::join()`, to produce a tree with a new root node,
     /// with the trees returned by the closures converted to the new root's
     /// child nodes.
+    ///
+    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// the root hash.
     pub fn join<LF, RF>(
-        self,
+        &self,
         left: LF,
         right: RF
     ) -> MerkleTree<D::HashOutput, L::LeafData>
@@ -230,44 +263,37 @@ where D: Hasher<L::Input>,
           RF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send
     {
         let (left_tree, right_tree) = rayon::join(left, right);
-        let mut builder = self.into_serial_builder();
-        builder.push_tree(left_tree);
-        builder.push_tree(right_tree);
-        builder.finish().unwrap()
+        self.inner.join(left_tree, right_tree)
     }
 
     /// Collects Merkle trees produced by a potentially parallelized
-    /// iterative computation as nodes for constructing the top
-    /// of the returned tree. If the iterator returns one tree (which can
-    /// be a single-leaf tree), it is returned as the result.
-    /// Multiple trees are made immediate children of the new root node of the
+    /// iterative computation as child nodes for the root of the
     /// returned tree.
+    ///
+    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// the root hash.
     ///
     /// # Errors
     ///
-    /// Returns the `EmptyTree` error when the input is empty.
+    /// Returns the `EmptyTree` error when the iteration turns out empty.
     ///
-    pub fn collect_nodes_from<I>(
-        self,
+    pub fn collect_children_from<I>(
+        &self,
         iterable: I
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    ) -> BuildResult<D::HashOutput, L::LeafData>
     where I: IntoParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
     {
-        self.collect_nodes_from_iter(iterable.into_par_iter())
+        self.collect_children_from_iter(iterable.into_par_iter())
     }
 
-    fn collect_nodes_from_iter<I>(
-        self,
+    fn collect_children_from_iter<I>(
+        &self,
         iter: I
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    ) -> BuildResult<D::HashOutput, L::LeafData>
     where I: ParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
     {
-        let nodes = iter.map(|tree| { tree.root }).collect();
-        let builder = tree::Builder::from_nodes(
-                self.hasher,
-                self.leaf_data_extractor,
-                nodes);
-        builder.finish()
+        let nodes: Vec<_> = iter.map(|tree| { tree.root }).collect();
+        self.inner.tree_from_nodes(nodes)
     }
 }
 
@@ -309,8 +335,41 @@ mod tests {
         let tree = builder.complete_tree_from(data).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
-                                    > the lazy dog";
+                                    #(> the lazy dog)";
             assert_eq!(hn.hash_bytes(), expected);
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn complete_tree_is_subgraph_of_its_math_definition() {
+        let builder = Builder::<MockHasher, _>::new();
+        let data: Vec<_> = TEST_DATA.chunks(10).collect();
+        let tree = builder.complete_tree_from(data).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] =
+                    b"#(#(>The quick >brown fox )#(>jumps over> the lazy ))\
+                      #(#(>dog))";
+            assert_eq!(hn.hash_bytes(), expected);
+            assert_eq!(hn.children.len(), 2);
+            if let Node::Hash(ref hn) = *hn.child_at(1) {
+                assert_eq!(hn.hash_bytes(), b"#(>dog)");
+                assert_eq!(hn.children.len(), 1);
+                if let Node::Hash(ref hn) = *hn.child_at(0) {
+                    assert_eq!(hn.hash_bytes(), b">dog");
+                    assert_eq!(hn.children.len(), 1);
+                    if let Node::Leaf(ref ln) = *hn.child_at(0) {
+                        assert_eq!(ln.hash_bytes(), b"dog");
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    unreachable!()
+                }
+            } else {
+                unreachable!()
+            }
         } else {
             unreachable!()
         }
@@ -323,13 +382,14 @@ mod tests {
 
     #[test]
     fn collect_nodes_for_arbitrary_arity_tree() {
-        let iter =
-            TEST_STRS.into_par_iter().map(|input| {
-                let builder = Builder::<MockHasher, _>::new();
-                builder.into_leaf(input)
-            });
         let builder = Builder::<MockHasher, leaf::NoData<&'static str>>::new();
-        let tree = builder.collect_nodes_from(iter).unwrap();
+        let iter =
+            TEST_STRS.into_par_iter().map_with(
+                builder.clone(),
+                |builder, input| {
+                    builder.make_leaf(input)
+                });
+        let tree = builder.collect_children_from(iter).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
             let mut peek_iter = hn.children().peekable();

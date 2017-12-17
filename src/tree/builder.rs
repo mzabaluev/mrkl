@@ -17,21 +17,17 @@ use std::fmt::Display;
 use std::iter::IntoIterator;
 
 
+/// A convenience type alias for the result type used by this crate.
+pub type BuildResult<H, T> = Result<MerkleTree<H, T>, EmptyTree>;
+
 /// The facility for constructing Merkle trees.
 ///
-/// Mutable `Builder` instances can be used to construct a Merkle
-/// tree. There are two ways of construction: incremental by using `Builder`
-/// instances to construct and compose trees, or by using the convenience
-/// method `complete_tree_from()` to create a complete binary tree out of a
-/// sequence of input values.
-///
-/// When used in the incremental fashion, a `Builder` contains a
-/// sequence of nodes which can be populated in order, to become one level
-/// – either the single root node, or the children of the
-/// newly calculated root node – of the Merkle tree created with
-/// the method `finish()`. Either input data values or subtrees already
-/// constructed from input data can be consumed to append leaf or hash
-/// nodes, respectively.
+/// A `Builder` instance can be used to construct a Merkle
+/// tree. There are two ways of construction: incremental by using a
+/// `Builder` to construct and compose a tree from leaves or previously
+/// constructed subtrees up to root, or by using the convenience method
+/// `complete_tree_from()` to create a left-filled, same-leaf-depth binary
+/// tree out of a sequence of input values.
 ///
 /// `Builder` has two type parameters: the hash exractor implementing trait
 /// `hash::Hasher`, and the leaf data extractor implementing trait
@@ -39,33 +35,37 @@ use std::iter::IntoIterator;
 /// context for type inference, one or both of these types can be inferred
 /// at the construction site.
 ///
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct Builder<D, L>
 where D: Hasher<L::Input>,
       L: leaf::ExtractData,
 {
     hasher: D,
-    leaf_data_extractor: L,
-    nodes: Vec<Node<D::HashOutput, L::LeafData>>
+    leaf_data_extractor: L
 }
 
 impl<D, L> plumbing::FromNodes for Builder<D, L>
 where D: Hasher<L::Input>,
       L: leaf::ExtractData,
 {
-    type Hasher = D;
-    type LeafDataExtractor = L;
+    type HashOutput = D::HashOutput;
+    type LeafData = L::LeafData;
 
-    fn from_nodes(
-        hasher: D,
-        leaf_data_extractor: L,
+    fn tree_from_nodes(
+        &self,
         nodes: Vec<Node<D::HashOutput, L::LeafData>>
-    ) -> Self {
-        Builder {
-            hasher,
-            leaf_data_extractor,
-            nodes
-        }
+    ) -> BuildResult<D::HashOutput, L::LeafData> {
+        self.make_tree(nodes.into())
+    }
+}
+
+impl<D, L> Clone for Builder<D, L>
+where D: Hasher<L::Input> + Clone,
+      L: leaf::ExtractData + Clone,
+{
+    fn clone(&self) -> Self {
+        Builder::from_hasher_leaf_data(
+            self.hasher.clone(), self.leaf_data_extractor.clone())
     }
 }
 
@@ -95,9 +95,10 @@ where D: Hasher<In> + Default
     /// # #[cfg(feature = "digest")]
     /// # fn main() {
     /// type Hasher = ByteDigestHasher<Sha256>;
-    /// let mut builder = Builder::<Hasher, _>::new();
+    /// let builder = Builder::<Hasher, _>::new();
     /// let data: &[u8] = b"the quick brown fox jumped over the lazy dog";
-    /// builder.push_leaf(data);
+    /// let tree = builder.make_leaf(data);
+    /// # let _ = tree;
     /// # }
     /// # #[cfg(not(feature = "digest"))]
     /// # fn main() { }
@@ -114,123 +115,125 @@ where D: Hasher<L::Input>,
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
-        Self::n_ary_from_hasher_leaf_data(2, hasher, leaf_data_extractor)
-    }
-
-    /// Constructs a `Builder` with capacity reserved for the given number
-    /// of child nodes,
-    /// from the given instances of the hasher and the leaf data extractor.
-    pub fn n_ary_from_hasher_leaf_data(
-        n: usize,
-        hasher: D,
-        leaf_data_extractor: L
-    ) -> Self {
         Builder {
             hasher,
-            leaf_data_extractor,
-            nodes: Vec::with_capacity(n)
+            leaf_data_extractor
         }
     }
 
-    /// Appends a leaf node to the sequence of nodes.
+    /// Transforms input data into a tree consisting of a single leaf node.
     ///
-    /// The hash value for the leaf node is calculated by the hash extractor,
-    /// and the leaf data value is obtained by the leaf data extractor
-    /// used by this `Builder`.
-    pub fn push_leaf(&mut self, input: L::Input) {
+    /// The hash value for the root leaf node is calculated by the hash
+    /// extractor, and the leaf data value is obtained by the leaf data
+    /// extractor used by this `Builder`.
+    pub fn make_leaf(
+        &self,
+        input: L::Input
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let hash = self.hasher.hash_input(&input);
         let data = self.leaf_data_extractor.extract_data(input);
-        self.nodes.push(Node::Leaf(LeafNode { hash, data }));
+        MerkleTree { root: Node::Leaf(LeafNode { hash, data }) }
     }
 
-    /// Appends a Merkle subtree as a hash node to the sequence of nodes.
-    pub fn push_tree(&mut self,
-                     tree: MerkleTree<D::HashOutput, L::LeafData>)
-    {
-        self.nodes.push(tree.root);
-    }
-
-    /// Appends leaf nodes with input data retrieved from an iterable.
-    pub fn extend_leaves<I>(&mut self, iter: I)
-    where I: IntoIterator<Item = L::Input> {
-        self.extend_leaves_impl(iter.into_iter())
-    }
-
-    fn extend_leaves_impl<I>(&mut self, iter: I)
-    where I: Iterator<Item = L::Input> {
-        let (size_low, _) = iter.size_hint();
-        self.nodes.reserve(size_low);
-        for input in iter {
-            self.push_leaf(input);
+    fn make_tree(
+        &self,
+        children: Box<[Node<D::HashOutput, L::LeafData>]>
+    ) -> BuildResult<D::HashOutput, L::LeafData> {
+        if children.is_empty() {
+            return Err(EmptyTree);
         }
+        Ok(self.make_tree_unchecked(children))
     }
 
-    fn nodes<'a>(&'a self) -> Nodes<'a, D::HashOutput, L::LeafData> {
-        Nodes(self.nodes.iter())
+    fn make_tree_unchecked(
+        &self,
+        children: Box<[Node<D::HashOutput, L::LeafData>]>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        debug_assert!(!children.is_empty());
+        let hash = self.hasher.hash_nodes(Nodes(children.iter()));
+        MerkleTree { root: Node::Hash(HashNode { hash, children }) }
     }
 
-    /// Constructs the final `MerkleTree` from the populated `Builder`
-    /// instance.
+    /// Joins the two given subtrees to produce a tree with a new root node,
+    /// with the passed trees converted to the new root's child nodes.
     ///
-    /// The tree constructed will depend on the number of nodes this
-    /// instance has been populated with. From a single leaf node, a
-    /// single-level tree is constructed containing the leaf node as
-    /// the root. If a single tree has been added as a hash node,
-    /// an equivalent tree is returned.
-    /// From multiple nodes, a tree is constructed by creating a
-    /// root hash node as the parent of the sequence of the populated nodes,
-    /// hashed with the `hash_nodes()` method of the hash extractor to
-    /// obtain the root hash.
+    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// the root hash.
+    pub fn join(
+        &self,
+        left:  MerkleTree<D::HashOutput, L::LeafData>,
+        right: MerkleTree<D::HashOutput, L::LeafData>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        let children = Box::new([left.root, right.root]);
+        self.make_tree_unchecked(children)
+    }
+
+    /// Constructs a Merkle tree with the passed subtree as the single
+    /// child of the root node, usually considered to be the leftmost child
+    /// in an _n_-ary tree.
+    ///
+    /// This method can be used to deal with the unpaired
+    /// rightmost node in a level of the tree under construction, when
+    /// equal path height to all leaf nodes needs to be maintained.
+    /// The `hash_nodes()` method of the hash extractor receives the child
+    /// as the single element in the `Nodes` iterator.
+    pub fn chain_lone_child(
+        &self,
+        child: MerkleTree<D::HashOutput, L::LeafData>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        let children = Box::new([child.root]);
+        self.make_tree_unchecked(children)
+    }
+
+    /// Collects Merkle trees from the given iterable as child nodes for the
+    /// root of the returned tree.
+    ///
+    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// the root hash.
     ///
     /// # Errors
     ///
-    /// Returns the `EmptyTree` error when called on an unpopulated
-    /// `Builder`.
+    /// Returns the `EmptyTree` error when the sequence of nodes is empty.
     ///
-    pub fn finish(
-        mut self
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
-    {
-        match self.nodes.len() {
-            0 => Err(EmptyTree),
-            1 => {
-                let root = self.nodes.pop().unwrap();
-                Ok(MerkleTree { root })
-            }
-            _ => {
-                let hash = self.hasher.hash_nodes(self.nodes());
-                let node = HashNode { hash, children: self.nodes.into() };
-                Ok(MerkleTree { root: Node::Hash(node) })
-            }
-        }
+    pub fn collect_children_from<I>(
+        &self,
+        iterable: I
+    ) -> BuildResult<D::HashOutput, L::LeafData>
+    where I: IntoIterator<Item = MerkleTree<D::HashOutput, L::LeafData>> {
+        self.collect_children_from_iter(iterable.into_iter())
     }
-}
 
-impl<D, L> Builder<D, L>
-where D: Hasher<L::Input> + Clone,
-      L: leaf::ExtractData + Clone,
-{
-    /// Constructs a [complete binary][nist] Merkle tree from a sequence of
-    /// input values with a known length. The nodes' hashes are calculated
+    fn collect_children_from_iter<I>(
+        &self,
+        iter: I
+    ) -> BuildResult<D::HashOutput, L::LeafData>
+    where I: Iterator<Item = MerkleTree<D::HashOutput, L::LeafData>> {
+        let children: Vec<_> = iter.map(|tree| tree.root).collect();
+        self.make_tree(children.into())
+    }
+
+    /// Constructs a left-filled binary Merkle tree from a sequence
+    /// of input values with a known length. The nodes' hashes are calculated
     /// by the hash extractor, and the leaf data values are extracted from
     /// input data with the leaf data exractor.
     ///
-    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
+    /// The constructed tree has the following properties: the left subtree
+    /// of the root node is a perfect binary tree, all leaf nodes are on the
+    /// same level (i.e. have the same depth), and nodes on every tree level
+    /// are packed to the left. This means that the rightmost internal node
+    /// on any level under root may have only a single child that is considered
+    /// to be the left child. This layout is a subgraph to the
+    /// [complete binary tree][nist] with the same leaf nodes at the deepest
+    /// level; higher-level leaf nodes of the complete tree do not carry
+    /// a practical meaning in this representation of the Merkle tree
+    /// and are not present in the data model, nor any internal nodes that
+    /// would have only such leaf nodes as descendants.
     ///
-    /// This method is only available when the hash extractor and the leaf
-    /// data extractor implement `Clone`. To use a closure expression for
-    /// the leaf data extractor, ensure that it does not capture any
-    /// variables from the closure environment by passing it through the
-    /// helper function `leaf::extract_with()`.
+    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// # Errors
     ///
     /// Returns the `EmptyTree` error when the input sequence is empty.
-    ///
-    /// # Panics
-    ///
-    /// Panics when called on a `Builder` that has been populated with any
-    /// nodes.
     ///
     /// # Examples
     ///
@@ -262,55 +265,54 @@ where D: Hasher<L::Input> + Clone,
     /// # fn main() { }
     /// ```
     pub fn complete_tree_from<I>(
-        mut self,
+        &self,
         iterable: I
-    ) -> Result<MerkleTree<D::HashOutput, L::LeafData>, EmptyTree>
+    ) -> BuildResult<D::HashOutput, L::LeafData>
     where I: IntoIterator<Item = L::Input>,
           I::IntoIter: ExactSizeIterator
     {
-        assert!(self.nodes.is_empty(),
-                "complete_tree_from() called on a populated Builder");
         let mut iter = iterable.into_iter();
         let len = iter.len();
         if len == 0 {
             return Err(EmptyTree);
         }
-        self.populate_complete_from_iter(&mut iter, len);
+        let perfect_len = len.checked_next_power_of_two().unwrap();
+        let tree = self.extract_complete_tree(&mut iter, len, perfect_len);
         debug_assert!(iter.next().is_none(),
                       "iterator has not been exhausted after reported length");
-        self.finish()
+        Ok(tree)
     }
 
-    fn populate_complete_from_iter<I>(&mut self, iter: &mut I, len: usize)
-    where I: Iterator<Item = L::Input>
-    {
+    fn extract_complete_tree<I>(
+        &self,
+        iter: &mut I,
+        len: usize,
+        perfect_len: usize
+    ) -> MerkleTree<D::HashOutput, L::LeafData>
+    where I: Iterator<Item = L::Input> {
         debug_assert!(len != 0);
-        if len == 1 {
-            let item = iter.next()
-                       .expect("iterator returned None \
-                                before its reported length was reached");
-            self.push_leaf(item);
+        let left_len = perfect_len / 2;
+        if len <= left_len {
+            // We're going to have no right subtree on this node.
+            // And it's still an internal node because this is never true
+            // when perfect_len == 1.
+            let left_tree = self.extract_complete_tree(
+                    iter, len, left_len);
+            self.chain_lone_child(left_tree)
+        } else if len == 1 {
+            let input = iter.next()
+                        .expect("iterator returned None \
+                                 before its reported length was reached");
+            self.make_leaf(input)
         } else {
-            let left_len = (len.saturating_add(1) / 2).next_power_of_two();
-            {
-                let mut builder = Builder::from_hasher_leaf_data(
-                            self.hasher.clone(),
-                            self.leaf_data_extractor.clone());
-                builder.populate_complete_from_iter(iter, left_len);
-                let left_tree = builder.finish().unwrap();
-                self.push_tree(left_tree);
-            }
+            let left_tree = self.extract_complete_tree(
+                    iter, left_len, left_len);
             // This never overflows or comes to 0 because
             // left_len < len for len >= 2
             let right_len = len - left_len;
-            {
-                let mut builder = Builder::from_hasher_leaf_data(
-                            self.hasher.clone(),
-                            self.leaf_data_extractor.clone());
-                builder.populate_complete_from_iter(iter, right_len);
-                let right_tree = builder.finish().unwrap();
-                self.push_tree(right_tree);
-            }
+            let right_tree = self.extract_complete_tree(
+                    iter, right_len, left_len);
+            self.join(left_tree, right_tree)
         }
     }
 }
@@ -338,43 +340,25 @@ mod tests {
     use super::Builder;
 
     use leaf;
-    use tree::{MerkleTree, EmptyTree, Node};
+    use tree::{Node};
 
     use super::super::testmocks::MockHasher;
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
     #[test]
-    fn empty_tree() {
-        use std::error::Error;
-
-        fn daft() -> Result<MerkleTree<Vec<u8>, ()>, EmptyTree> {
-            let builder = Builder::<MockHasher, leaf::NoData<String>>::new();
-            let _ = builder.finish()?;
-            unreachable!()
-        }
-
-        let err = daft().unwrap_err();
-        assert_eq!(err.description(), "empty Merkle tree");
-        println!("{}", err);
-        println!("{:?}", err);
-    }
-
-    #[test]
     fn builder_no_data_fixed_size_array() {
-        let mut builder = Builder::<MockHasher, _>::new();
-        builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
-        let tree = builder.finish().unwrap();
+        let builder = Builder::<MockHasher, _>::new();
+        let tree = builder.make_leaf([1u8, 2u8, 3u8, 4u8]);
         assert_eq!(tree.root().hash_bytes(), &[1, 2, 3, 4]);
     }
 
     #[test]
     fn builder_with_owned_leaves() {
         let hasher = MockHasher::default();
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::owned());
-        builder.push_leaf([1u8, 2u8, 3u8, 4u8]);
-        let tree = builder.finish().unwrap();
+        let tree = builder.make_leaf([1u8, 2u8, 3u8, 4u8]);
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[1, 2, 3, 4]);
             assert_eq!(ln.data(), &[1, 2, 3, 4]);
@@ -386,10 +370,9 @@ mod tests {
     #[test]
     fn builder_leaf_extract_with_plain_fn() {
         let hasher = MockHasher::default();
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: [u8; 4]| { s.len() }));
-        builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
-        let tree = builder.finish().unwrap();
+        let tree = builder.make_leaf([0u8, 1u8, 2u8, 3u8]);
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
             assert_eq!(*ln.data(), 4);
@@ -402,11 +385,10 @@ mod tests {
     fn builder_leaf_extract_with_closure() {
         let hasher = MockHasher::default();
         let off = 42;
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher,
                 leaf::ExtractFn::with(|s: [u8; 4]| { s.len() + off }));
-        builder.push_leaf([0u8, 1u8, 2u8, 3u8]);
-        let tree = builder.finish().unwrap();
+        let tree = builder.make_leaf([0u8, 1u8, 2u8, 3u8]);
         if let Node::Leaf(ref ln) = *tree.root() {
             assert_eq!(ln.hash_bytes(), &[0, 1, 2, 3]);
             assert_eq!(*ln.data(), 46);
@@ -418,20 +400,19 @@ mod tests {
     #[test]
     fn builder_over_nonstatic_slice() {
         let v = Vec::from(TEST_DATA);
-        let mut builder = Builder::<MockHasher, leaf::NoData<&[u8]>>::new();
-        builder.push_leaf(&v[..]);
-        let tree = builder.finish().unwrap();
+        let builder = Builder::<MockHasher, leaf::NoData<&[u8]>>::new();
+        let tree = builder.make_leaf(&v[..]);
         assert_eq!(tree.root().hash_bytes(), TEST_DATA);
     }
 
     #[test]
     fn two_leaves_make_a_tree() {
         let hasher = MockHasher::default();
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: &str| { s.to_string() }));
-        builder.push_leaf("eats shoots");
-        builder.push_leaf("and leaves");
-        let tree = builder.finish().unwrap();
+        let left_leaf = builder.make_leaf("eats shoots");
+        let right_leaf = builder.make_leaf("and leaves");
+        let tree = builder.join(left_leaf, right_leaf);
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">eats shoots>and leaves");
             let child = hn.child_at(0);
@@ -457,13 +438,12 @@ mod tests {
     #[should_panic]
     fn child_out_of_range() {
         let hasher = MockHasher::default();
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::no_data());
-        builder.push_leaf("eats shoots");
-        builder.push_leaf("and leaves");
-        let tree = builder.finish().unwrap();
+        let child = builder.make_leaf("eats shoots");
+        let tree = builder.chain_lone_child(child);
         if let Node::Hash(ref hn) = *tree.root() {
-            let _child = hn.child_at(2);
+            let _child = hn.child_at(1);
         } else {
             unreachable!()
         }
@@ -475,17 +455,20 @@ mod tests {
         "and leaves."];
 
     #[test]
-    fn three_leaves_make_a_ternary_tree() {
+    fn collect_children_for_arbitrary_arity_tree() {
         let hasher = MockHasher::default();
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 hasher, leaf::extract_with(|s: &str| { s.to_string() }));
-        for s in TEST_STRS.iter() {
-            builder.push_leaf(s);
-        }
-        let tree = builder.finish().unwrap();
+        let leaves =
+            TEST_STRS.iter().map(|s| {
+                builder.make_leaf(s)
+            });
+        let tree = builder.collect_children_from(leaves).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
-            for (i, child) in hn.children().enumerate() {
+            let mut peek_iter = hn.children().peekable();
+            assert!(peek_iter.peek().is_some());
+            for (i, child) in peek_iter.enumerate() {
                 if let Node::Leaf(ref ln) = *child {
                     assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
                     assert_eq!(ln.data(), TEST_STRS[i]);
@@ -499,42 +482,17 @@ mod tests {
     }
 
     #[test]
-    fn extend_leaves_for_arbitrary_arity_tree() {
-        let mut builder = Builder::<MockHasher, _>::new();
-        builder.extend_leaves(TEST_STRS.iter());
-        let tree = builder.finish().unwrap();
-        if let Node::Hash(ref hn) = *tree.root() {
-            assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");
-            let mut peek_iter = hn.children().peekable();
-            assert!(peek_iter.peek().is_some());
-            for (i, child) in peek_iter.enumerate() {
-                if let Node::Leaf(ref ln) = *child {
-                    assert_eq!(ln.hash_bytes(), TEST_STRS[i].as_bytes());
-                } else {
-                    unreachable!()
-                }
-            }
-        } else {
-            unreachable!()
-        }
-    }
-
-    #[test]
-    fn stack_builders_for_multilevel_tree() {
+    fn stack_trees() {
         fn leaf_extractor(s: &str) -> String { s.to_string() }
 
-        let mut builder = Builder::from_hasher_leaf_data(
+        let builder = Builder::from_hasher_leaf_data(
                 MockHasher::default(),
                 leaf::extract_with(leaf_extractor));
-        builder.push_leaf("shoots,");
-        builder.push_leaf("and leaves.");
-        let subtree = builder.finish().unwrap();
-        let mut builder = Builder::from_hasher_leaf_data(
-                MockHasher::default(),
-                leaf::extract_with(leaf_extractor));
-        builder.push_leaf("Panda eats,");
-        builder.push_tree(subtree);
-        let tree = builder.finish().unwrap();
+        let left = builder.make_leaf("shoots,");
+        let right = builder.make_leaf("and leaves.");
+        let subtree = builder.join(left, right);
+        let left = builder.make_leaf("Panda eats,");
+        let tree = builder.join(left, subtree);
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b">Panda eats,#(>shoots,>and leaves.)";
             assert_eq!(hn.hash_bytes(), expected);
@@ -578,20 +536,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn complete_tree_from_panics_on_populated_builder() {
-        let mut builder = Builder::<MockHasher, _>::new();
-        builder.push_leaf(&[0u8][..]);
-        let _ = builder.complete_tree_from(TEST_DATA.chunks(1));
-    }
-
-    #[test]
     fn complete_tree_with_no_leaf_data() {
         let builder = Builder::<MockHasher, _>::new();
         let tree = builder.complete_tree_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
-                                    > the lazy dog";
+                                    #(> the lazy dog)";
             assert_eq!(hn.hash_bytes(), expected);
         } else {
             unreachable!()
@@ -607,11 +557,17 @@ mod tests {
         let tree = builder.complete_tree_from(iter).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
-                                    > the lazy dog";
+                                    #(> the lazy dog)";
             assert_eq!(hn.hash_bytes(), expected);
-            if let Node::Leaf(ref ln) = *hn.child_at(1) {
-                assert_eq!(ln.hash_bytes(), b" the lazy dog");
-                assert_eq!(ln.data(), b" the lazy dog");
+            assert_eq!(hn.children().len(), 2);
+            if let Node::Hash(ref hn) = *hn.child_at(1) {
+                assert_eq!(hn.children().len(), 1);
+                if let Node::Leaf(ref ln) = *hn.child_at(0) {
+                    assert_eq!(ln.hash_bytes(), b" the lazy dog");
+                    assert_eq!(ln.data(), b" the lazy dog");
+                } else {
+                    unreachable!()
+                }
             } else {
                 unreachable!()
             }
@@ -628,11 +584,73 @@ mod tests {
         let tree = builder.complete_tree_from(TEST_DATA.chunks(15)).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
-                                    > the lazy dog";
+                                    #(> the lazy dog)";
             assert_eq!(hn.hash_bytes(), expected);
-            if let Node::Leaf(ref ln) = *hn.child_at(1) {
-                assert_eq!(ln.hash_bytes(), b" the lazy dog");
-                assert_eq!(*ln.data(), b't');
+            if let Node::Hash(ref hn) = *hn.child_at(0) {
+                if let Node::Leaf(ref ln) = *hn.child_at(1) {
+                    assert_eq!(ln.hash_bytes(), b" fox jumps over");
+                    assert_eq!(*ln.data(), b'f');
+                } else {
+                    unreachable!()
+                }
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn complete_tree_using_leaf_extract_closure() {
+        let off = 1;
+        let builder = Builder::from_hasher_leaf_data(
+                MockHasher::default(),
+                leaf::ExtractFn::with(|s: &[u8]| { s[1] + off }));
+        let tree = builder.complete_tree_from(TEST_DATA.chunks(15)).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] = b"#(>The quick brown> fox jumps over)\
+                                    #(> the lazy dog)";
+            assert_eq!(hn.hash_bytes(), expected);
+            if let Node::Hash(ref hn) = *hn.child_at(0) {
+                if let Node::Leaf(ref ln) = *hn.child_at(1) {
+                    assert_eq!(ln.hash_bytes(), b" fox jumps over");
+                    assert_eq!(*ln.data(), b'g');
+                } else {
+                    unreachable!()
+                }
+            } else {
+                unreachable!()
+            }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn complete_tree_is_subgraph_of_its_math_definition() {
+        let builder = Builder::<MockHasher, _>::new();
+        let tree = builder.complete_tree_from(TEST_DATA.chunks(10)).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] =
+                    b"#(#(>The quick >brown fox )#(>jumps over> the lazy ))\
+                      #(#(>dog))";
+            assert_eq!(hn.hash_bytes(), expected);
+            assert_eq!(hn.children.len(), 2);
+            if let Node::Hash(ref hn) = *hn.child_at(1) {
+                assert_eq!(hn.hash_bytes(), b"#(>dog)");
+                assert_eq!(hn.children.len(), 1);
+                if let Node::Hash(ref hn) = *hn.child_at(0) {
+                    assert_eq!(hn.hash_bytes(), b">dog");
+                    assert_eq!(hn.children.len(), 1);
+                    if let Node::Leaf(ref ln) = *hn.child_at(0) {
+                        assert_eq!(ln.hash_bytes(), b"dog");
+                    } else {
+                        unreachable!()
+                    }
+                } else {
+                    unreachable!()
+                }
             } else {
                 unreachable!()
             }
