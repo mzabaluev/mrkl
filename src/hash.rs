@@ -8,7 +8,7 @@
 
 //! The abstraction of the hash algorithm for Merkle trees.
 
-use tree::Nodes;
+use tree::Children;
 
 /// A hash algorithm implementation for a Merkle tree.
 ///
@@ -44,7 +44,8 @@ pub trait NodeHasher {
     ///
     /// The type parameter represents arbitrary list node data and should
     /// be ignored for all purposes.
-    fn hash_nodes<'a, L>(&'a self,
-                         iter: Nodes<'a, Self::HashOutput, L>)
-                         -> Self::HashOutput;
+    fn hash_children<'a, L>(
+        &'a self,
+        iter: Children<'a, Self::HashOutput, L>
+    ) -> Self::HashOutput;
 }

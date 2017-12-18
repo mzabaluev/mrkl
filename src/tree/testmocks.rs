@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use hash::{Hasher, NodeHasher};
-use tree::{Nodes, Node};
+use tree::{Children, Node};
 
 #[derive(Clone, Debug, Default)]
 pub struct MockHasher;
@@ -22,10 +22,10 @@ impl NodeHasher for MockHasher {
 
     type HashOutput = Vec<u8>;
 
-    fn hash_nodes<'a, L>(&'a self,
-                         iter: Nodes<'a, Vec<u8>, L>)
-                         -> Vec<u8>
-    {
+    fn hash_children<'a, L>(
+        &'a self,
+        iter: Children<'a, Vec<u8>, L>
+    ) -> Vec<u8> {
         let mut dump = Vec::new();
         for node in iter {
             match *node {

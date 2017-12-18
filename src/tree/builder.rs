@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{MerkleTree, Node, HashNode, LeafNode, Nodes};
+use super::{MerkleTree, Node, HashNode, LeafNode, Children};
 use super::plumbing;
 use hash::Hasher;
 use leaf;
@@ -150,14 +150,14 @@ where D: Hasher<L::Input>,
         children: Box<[Node<D::HashOutput, L::LeafData>]>
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         debug_assert!(!children.is_empty());
-        let hash = self.hasher.hash_nodes(Nodes(children.iter()));
+        let hash = self.hasher.hash_children(Children(children.iter()));
         MerkleTree { root: Node::Hash(HashNode { hash, children }) }
     }
 
     /// Joins the two given subtrees to produce a tree with a new root node,
     /// with the passed trees converted to the new root's child nodes.
     ///
-    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// The `hash_children()` method of the hash extractor is used to obtain
     /// the root hash.
     pub fn join(
         &self,
@@ -175,8 +175,8 @@ where D: Hasher<L::Input>,
     /// This method can be used to deal with the unpaired
     /// rightmost node in a level of the tree under construction, when
     /// equal path height to all leaf nodes needs to be maintained.
-    /// The `hash_nodes()` method of the hash extractor receives the child
-    /// as the single element in the `Nodes` iterator.
+    /// The `hash_children()` method of the hash extractor receives the child
+    /// as the single element in the `Children` iterator.
     pub fn chain_lone_child(
         &self,
         child: MerkleTree<D::HashOutput, L::LeafData>
@@ -188,7 +188,7 @@ where D: Hasher<L::Input>,
     /// Collects Merkle trees from the given iterable as child nodes for the
     /// root of the returned tree.
     ///
-    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// The `hash_children()` method of the hash extractor is used to obtain
     /// the root hash.
     ///
     /// # Errors

@@ -31,7 +31,7 @@
 //! the `digest` feature, which is enabled by default.
 
 use hash::{Hasher, NodeHasher};
-use tree::Nodes;
+use tree::Children;
 
 pub extern crate digest_hash;
 
@@ -77,9 +77,9 @@ where D: Default,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
-    fn hash_nodes<'a, L>(
+    fn hash_children<'a, L>(
         &'a self,
-        iter: Nodes<'a, Self::HashOutput, L>
+        mut iter: Children<'a, Self::HashOutput, L>
     ) -> Self::HashOutput {
         let mut digest = D::default();
         digest.process(&[1u8]);
@@ -188,11 +188,11 @@ where D: FixedOutput,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
-    fn hash_nodes<'a, L>(
+    fn hash_children<'a, L>(
         &'a self,
-        iter: Nodes<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>
     ) -> Self::HashOutput {
-        self.node_hasher.hash_nodes(iter)
+        self.node_hasher.hash_children(iter)
     }
 }
 
@@ -295,11 +295,11 @@ where D: FixedOutput,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
-    fn hash_nodes<'a, L>(
+    fn hash_children<'a, L>(
         &'a self,
-        iter: Nodes<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>
     ) -> Self::HashOutput {
-        self.node_hasher.hash_nodes(iter)
+        self.node_hasher.hash_children(iter)
     }
 }
 
@@ -308,7 +308,7 @@ mod tests {
     use super::{DigestHasher, ByteDigestHasher};
     use hash::{Hasher, NodeHasher};
 
-    use tree::{Builder, Nodes};
+    use tree::{Builder, Children};
     use leaf;
 
     extern crate sha2;
@@ -357,10 +357,10 @@ mod tests {
     impl NodeHasher for CustomNodeHasher {
         type HashOutput = GenericArray<u8, <Sha256 as FixedOutput>::OutputSize>;
 
-        fn hash_nodes<'a, L>(&'a self,
-                             iter: Nodes<'a, Self::HashOutput, L>)
-                             -> Self::HashOutput
-        {
+        fn hash_children<'a, L>(
+            &'a self,
+            iter: Children<'a, Self::HashOutput, L>
+        ) -> Self::HashOutput {
             let mut digest = Sha256::default();
             for node in iter {
                 digest.process(node.hash_bytes())

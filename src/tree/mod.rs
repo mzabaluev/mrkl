@@ -142,8 +142,8 @@ impl<H, T> HashNode<H, T> {
     }
 
     /// Returns an iterator over the child nodes.
-    pub fn children<'a>(&'a self) -> Nodes<'a, H, T> {
-        Nodes(self.children.iter())
+    pub fn children<'a>(&'a self) -> Children<'a, H, T> {
+        Children(self.children.iter())
     }
 }
 
@@ -286,15 +286,15 @@ impl_hash_for! {
 /// An iterator over borrowed values of tree nodes, usually being the
 /// child nodes of a single hash node.
 #[derive(Debug)]
-pub struct Nodes<'a, H: 'a, T: 'a>(slice::Iter<'a, Node<H, T>>);
+pub struct Children<'a, H: 'a, T: 'a>(slice::Iter<'a, Node<H, T>>);
 
-impl<'a, H, T> Clone for Nodes<'a, H, T> {
+impl<'a, H, T> Clone for Children<'a, H, T> {
     fn clone(&self) -> Self {
-        Nodes(self.0.clone())
+        Children(self.0.clone())
     }
 }
 
-impl<'a, H, T> Iterator for Nodes<'a, H, T> {
+impl<'a, H, T> Iterator for Children<'a, H, T> {
     type Item = &'a Node<H, T>;
     fn next(&mut self) -> Option<Self::Item> { self.0.next() }
     fn size_hint(&self) -> (usize, Option<usize>) { self.0.size_hint() }
@@ -303,10 +303,10 @@ impl<'a, H, T> Iterator for Nodes<'a, H, T> {
     fn last(self) -> Option<Self::Item> { self.0.last() }
 }
 
-impl<'a, H, T> ExactSizeIterator for Nodes<'a, H, T> {
+impl<'a, H, T> ExactSizeIterator for Children<'a, H, T> {
     fn len(&self) -> usize { self.0.len() }
 }
 
-impl<'a, H, T> DoubleEndedIterator for Nodes<'a, H, T> {
+impl<'a, H, T> DoubleEndedIterator for Children<'a, H, T> {
     fn next_back(&mut self) -> Option<Self::Item> { self.0.next_back() }
 }

@@ -124,8 +124,8 @@ where D: Hasher<L::Input>,
     /// This method can be used to deal with the unpaired
     /// rightmost node in a level of the tree under construction, when
     /// equal path height to all leaf nodes needs to be maintained.
-    /// The `hash_nodes()` method of the hash extractor receives the child
-    /// as the single element in the `Nodes` iterator.
+    /// The `hash_children()` method of the hash extractor receives the child
+    /// as the single element in the `Children` iterator.
     pub fn chain_lone_child(
         &self,
         child: MerkleTree<D::HashOutput, L::LeafData>
@@ -252,7 +252,7 @@ where D: Hasher<L::Input>,
     /// with the trees returned by the closures converted to the new root's
     /// child nodes.
     ///
-    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// The `hash_children()` method of the hash extractor is used to obtain
     /// the root hash.
     pub fn join<LF, RF>(
         &self,
@@ -270,7 +270,7 @@ where D: Hasher<L::Input>,
     /// iterative computation as child nodes for the root of the
     /// returned tree.
     ///
-    /// The `hash_nodes()` method of the hash extractor is used to obtain
+    /// The `hash_children()` method of the hash extractor is used to obtain
     /// the root hash.
     ///
     /// # Errors
