@@ -25,9 +25,10 @@ pub type BuildResult<H, T> = Result<MerkleTree<H, T>, EmptyTree>;
 /// A `Builder` instance can be used to construct a Merkle
 /// tree. There are two ways of construction: incremental by using a
 /// `Builder` to construct and compose a tree from leaves or previously
-/// constructed subtrees up to root, or by using the convenience method
-/// `complete_tree_from()` to create a left-filled, same-leaf-depth binary
-/// tree out of a sequence of input values.
+/// constructed subtrees up to root, or by using the convenience methods
+/// `complete_tree_from()` or `full_tree_from()` to create one of the two
+/// commonly used nearly-balanced binary tree layouts out of a sequence of
+/// input values.
 ///
 /// `Builder` has two type parameters: the hash exractor implementing trait
 /// `hash::Hasher`, and the leaf data extractor implementing trait
@@ -212,10 +213,10 @@ where D: Hasher<L::Input>,
         self.make_tree(children.into())
     }
 
-    /// Constructs a left-filled binary Merkle tree from a sequence
-    /// of input values with a known length. The nodes' hashes are calculated
-    /// by the hash extractor, and the leaf data values are extracted from
-    /// input data with the leaf data exractor.
+    /// Constructs a left-filled, same-leaf-depth binary Merkle tree from a
+    /// sequence of input values with a known length. The nodes' hashes are
+    /// calculated by the hash extractor, and the leaf data values are
+    /// extracted from input data with the leaf data exractor.
     ///
     /// The constructed tree has the following properties: the left subtree
     /// of the root node is a perfect binary tree, all leaf nodes are on the
@@ -223,13 +224,13 @@ where D: Hasher<L::Input>,
     /// are packed to the left. This means that the rightmost internal node
     /// on any level under root may have only a single child that is considered
     /// to be the left child. This layout is a subgraph to the
-    /// [complete binary tree][nist] with the same leaf nodes at the deepest
-    /// level; higher-level leaf nodes of the complete tree do not carry
-    /// a practical meaning in this representation of the Merkle tree
+    /// [complete binary tree][nist-complete] with the same leaf nodes at the
+    /// deepest level; higher-level leaf nodes of the complete tree do not
+    /// carry a practical meaning in this representation of the Merkle tree
     /// and are not present in the data model, nor any internal nodes that
     /// would have only such leaf nodes as descendants.
     ///
-    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
+    /// [nist-complete]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// # Errors
     ///
@@ -312,6 +313,95 @@ where D: Hasher<L::Input>,
             let right_len = len - left_len;
             let right_tree = self.extract_complete_tree(
                     iter, right_len, left_len);
+            self.join(left_tree, right_tree)
+        }
+    }
+
+    /// Constructs a [full][nist-full] binary Merkle tree from a sequence
+    /// of input values with a known length. The nodes' hashes are calculated
+    /// by the hash extractor, and the leaf data values are extracted from
+    /// input data with the leaf data exractor.
+    ///
+    /// The constructed tree has the following properties: the left subtree
+    /// of any internal node, including root, is a perfect binary tree,
+    /// nodes on every tree level are packed to the left, but the tree is
+    /// not necessarily balanced, i.e. the leaf nodes are not generally all
+    /// on the same level.
+    ///
+    /// [nist-full]: https://xlinux.nist.gov/dads/HTML/fullBinaryTree.html
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when the input sequence is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # extern crate mrkl;
+    /// # #[cfg(feature = "digest")]
+    /// # extern crate sha2;
+    /// #
+    /// use mrkl::leaf;
+    /// use mrkl::tree::Builder;
+    /// # #[cfg(feature = "digest")]
+    /// use mrkl::digest::ByteDigestHasher;
+    /// # #[cfg(feature = "digest")]
+    /// use sha2::Sha256;
+    ///
+    /// # #[cfg(feature = "digest")]
+    /// # fn main() {
+    /// type Hasher = ByteDigestHasher<Sha256>;
+    ///
+    /// let builder = Builder::from_hasher_leaf_data(
+    ///                 Hasher::new(),
+    ///                 leaf::extract_with(|s: &[u8]| { s[0] }));
+    /// let input: &'static [u8] = b"The quick brown fox \
+    ///                              jumps over the lazy dog";
+    /// let tree = builder.full_tree_from(input.chunks(10)).unwrap();
+    /// #     let _ = tree;
+    /// # }
+    /// # #[cfg(not(feature = "digest"))]
+    /// # fn main() { }
+    /// ```
+    pub fn full_tree_from<I>(
+        &self,
+        iterable: I
+    ) -> BuildResult<D::HashOutput, L::LeafData>
+    where I: IntoIterator<Item = L::Input>,
+          I::IntoIter: ExactSizeIterator
+    {
+        let mut iter = iterable.into_iter();
+        let len = iter.len();
+        if len == 0 {
+            return Err(EmptyTree);
+        }
+        let tree = self.extract_full_tree(&mut iter, len);
+        debug_assert!(iter.next().is_none(),
+                      "iterator has not been exhausted after reported length");
+        Ok(tree)
+    }
+
+    fn extract_full_tree<I>(
+        &self,
+        iter: &mut I,
+        len: usize
+    ) -> MerkleTree<D::HashOutput, L::LeafData>
+    where I: Iterator<Item = L::Input> {
+        debug_assert!(len != 0);
+        if len == 1 {
+            let input = iter.next()
+                        .expect("iterator returned None \
+                                 before its reported length was reached");
+            self.make_leaf(input)
+        } else {
+            let left_len = (len.saturating_add(1) / 2).next_power_of_two();
+            let left_tree = self.extract_full_tree(
+                    iter, left_len);
+            // This never overflows or comes to 0 because
+            // left_len < len for len >= 2
+            let right_len = len - left_len;
+            let right_tree = self.extract_full_tree(
+                    iter, right_len);
             self.join(left_tree, right_tree)
         }
     }
@@ -654,6 +744,20 @@ mod tests {
             } else {
                 unreachable!()
             }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn full_tree_is_full() {
+        let builder = Builder::<MockHasher, _>::new();
+        let tree = builder.full_tree_from(TEST_DATA.chunks(7)).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] =
+                    b"#(#(>The qui>ck brow)#(>n fox j>umps ov))\
+                      #(#(>er the >lazy do)>g)";
+            assert_eq!(hn.hash_bytes(), expected);
         } else {
             unreachable!()
         }

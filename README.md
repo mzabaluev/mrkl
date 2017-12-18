@@ -30,6 +30,11 @@ gets stored inside leaf nodes.
   value distinguishing a leaf node from a non-leaf node, to protect against
   second-preimage attacks, can be provided by default.
 
+* Building both left-filled, uniform-leaf-depth binary trees permitting
+  single-child rightmost internal nodes (as in Bitcoin), and full, but not
+  necessarily balanced binary trees (as in Certificate Transparency),
+  should be supported as primary use cases.
+
 * Calculation of Merkle trees is eminently parallelizable, so an
   implementation using a work-stealing thread pool should be provided
   as an optional feature.

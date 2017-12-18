@@ -141,9 +141,10 @@ where D: Hasher<L::Input> + Clone + Send,
       L::Input: Send,
       L::LeafData: Send
 {
-    /// Constructs a left-filled binary Merkle tree from a parallel
-    /// iterator with a known length, or anything that can be converted
-    /// into such an iterator, e.g. any `Vec` with `Send` members.
+    /// Constructs a left-filled, same-leaf-depth binary Merkle tree from a
+    /// parallel iterator over input values with a known length, or anything
+    /// that can be converted into such an iterator, e.g. any `Vec` with
+    /// `Send` members.
     /// The nodes' hashes are calculated by the hash extractor, and
     /// the leaf data values are extracted from input data with the
     /// leaf data exractor.
@@ -154,23 +155,23 @@ where D: Hasher<L::Input> + Clone + Send,
     /// are packed to the left. This means that the rightmost internal node
     /// on any level under root may have only a single child that is considered
     /// to be the left child. This layout is a subgraph to the
-    /// [complete binary tree][nist] with the same leaf nodes at the deepest
-    /// level; higher-level leaf nodes of the complete tree do not carry
-    /// a practical meaning in this representation of the Merkle tree
+    /// [complete binary tree][nist-complete] with the same leaf nodes at the
+    /// deepest level; higher-level leaf nodes of the complete tree do not
+    /// carry a practical meaning in this representation of the Merkle tree
     /// and are not present in the data model, nor any internal nodes that
     /// would have only such leaf nodes as descendants.
     ///
-    /// [nist]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
+    /// [nist-complete]: https://xlinux.nist.gov/dads/HTML/completeBinaryTree.html
     ///
     /// The work to construct subtrees gets recursively subdivided and
     /// distributed across a thread pool managed by Rayon. Construction
     /// of the leaf nodes is also parallelized across the input sequence.
-    /// The implementation allocates an amount of memory that can be
-    /// approximated as `s ⋅ n ⋅ (1 + (⌈log₂(n)⌉ - 1) / 2)`, where `n`
-    /// is the length of the input sequence, and `s` is the size of a tree
-    /// node which is somewhat larger than the sum of sizes of a hash value
-    /// and a leaf data value. Part of the allocated memory gets recycled
-    /// in the created tree, which takes `s ⋅ n ⋅ 2 - 1`.
+    /// The implementation temporarily allocates an amount of memory that
+    /// can be approximated as **s ⋅ n ⋅ (1 + (⌈log₂(n)⌉ - 1) / 2)**, where
+    /// **n** is the length of the input sequence, and **s** is the size of
+    /// a tree node which is somewhat larger than the sum of sizes of a
+    /// hash value and a leaf data value. Part of the allocated memory gets
+    /// recycled in the created tree, which takes approximately **s ⋅ n ⋅ 2**.
     ///
     /// This method is only available when the hash extractor and the leaf
     /// data extractor implement `Clone`. To use a closure expression for
@@ -209,10 +210,10 @@ where D: Hasher<L::Input> + Clone + Send,
                 "the parallel iterator that reported nonzero length \
                  has come up empty");
         let perfect_len = leaves.len().checked_next_power_of_two().unwrap();
-        Ok(self.reduce(leaves, perfect_len))
+        Ok(self.reduce_complete(leaves, perfect_len))
     }
 
-    fn reduce(
+    fn reduce_complete(
         &self,
         mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>,
         perfect_len: usize
@@ -224,7 +225,7 @@ where D: Hasher<L::Input> + Clone + Send,
             // We're going to have no right subtree on this node.
             // And it's still an internal node because this is never true
             // when perfect_len == 1.
-            let subtree = self.reduce(level_nodes, left_len);
+            let subtree = self.reduce_complete(level_nodes, left_len);
             self.chain_lone_child(subtree)
         } else if len == 1 {
             level_nodes.pop().unwrap()
@@ -234,8 +235,93 @@ where D: Hasher<L::Input> + Clone + Send,
             let left_builder = self.clone();
             let right_builder = self.clone();
             self.join(
-                move || { left_builder.reduce(left, left_len) },
-                move || { right_builder.reduce(right, left_len) }
+                move || { left_builder.reduce_complete(left, left_len) },
+                move || { right_builder.reduce_complete(right, left_len) }
+            )
+        }
+    }
+
+    /// Constructs a [full][nist-full] binary Merkle tree from a parallel
+    /// iterator with a known length, or anything that can be converted
+    /// into such an iterator, e.g. any `Vec` with `Send` members.
+    /// The nodes' hashes are calculated by the hash extractor, and
+    /// the leaf data values are extracted from input data with the
+    /// leaf data exractor.
+    ///
+    /// The constructed tree has the following properties: the left subtree
+    /// of any internal node, including root, is a perfect binary tree,
+    /// nodes on every tree level are packed to the left, but the tree is
+    /// not necessarily balanced, i.e. the leaf nodes are not generally all
+    /// on the same level.
+    ///
+    /// [nist-full]: https://xlinux.nist.gov/dads/HTML/fullBinaryTree.html
+    ///
+    /// The work to construct subtrees gets recursively subdivided and
+    /// distributed across a thread pool managed by Rayon. Construction
+    /// of the leaf nodes is also parallelized across the input sequence.
+    /// The implementation temporarily allocates an amount of memory that
+    /// can be approximated as **s ⋅ n ⋅ (1 + (⌈log₂(n)⌉ - 1) / 2)**, where
+    /// **n** is the length of the input sequence, and **s** is the size of
+    /// a tree node which is somewhat larger than the sum of sizes of a
+    /// hash value and a leaf data value. Part of the allocated memory gets
+    /// recycled in the created tree, which takes approximately **s ⋅ n ⋅ 2**.
+    ///
+    /// This method is only available when the hash extractor and the leaf
+    /// data extractor implement `Clone`. To use a closure expression for
+    /// the leaf data extractor, ensure that it does not capture any
+    /// variables from the closure environment by passing it through the
+    /// helper function `leaf::extract_with()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns the `EmptyTree` error when the input is empty.
+    ///
+    pub fn full_tree_from<I>(
+        &self,
+        iterable: I
+    ) -> BuildResult<D::HashOutput, L::LeafData>
+    where I: IntoParallelIterator<Item = L::Input>,
+          I::Iter: IndexedParallelIterator,
+    {
+        self.full_tree_from_iter(iterable.into_par_iter())
+    }
+
+    fn full_tree_from_iter<I>(
+        &self,
+        mut iter: I
+    ) -> BuildResult<D::HashOutput, L::LeafData>
+    where I: IndexedParallelIterator<Item = L::Input> {
+        if iter.len() == 0 {
+            return Err(EmptyTree);
+        }
+        let leaves: Vec<_> =
+            iter.map_with(self.clone(), |master, input| {
+                master.make_leaf(input)
+            })
+            .collect();
+        assert!(leaves.len() != 0,
+                "the parallel iterator that reported nonzero length \
+                 has come up empty");
+        Ok(self.reduce_full(leaves))
+    }
+
+    fn reduce_full(
+        &self,
+        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>
+    ) -> MerkleTree<D::HashOutput, L::LeafData> {
+        let len = level_nodes.len();
+        debug_assert!(len != 0);
+        let left_len = (len.saturating_add(1) / 2).next_power_of_two();
+        if len == 1 {
+            level_nodes.pop().unwrap()
+        } else {
+            let right = level_nodes.split_off(left_len);
+            let left = level_nodes;
+            let left_builder = self.clone();
+            let right_builder = self.clone();
+            self.join(
+                move || { left_builder.reduce_full(left) },
+                move || { right_builder.reduce_full(right) }
             )
         }
     }
@@ -370,6 +456,21 @@ mod tests {
             } else {
                 unreachable!()
             }
+        } else {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn full_tree_is_full() {
+        let builder = Builder::<MockHasher, _>::new();
+        let data: Vec<_> = TEST_DATA.chunks(7).collect();
+        let tree = builder.full_tree_from(data).unwrap();
+        if let Node::Hash(ref hn) = *tree.root() {
+            let expected: &[u8] =
+                    b"#(#(>The qui>ck brow)#(>n fox j>umps ov))\
+                      #(#(>er the >lazy do)>g)";
+            assert_eq!(hn.hash_bytes(), expected);
         } else {
             unreachable!()
         }
