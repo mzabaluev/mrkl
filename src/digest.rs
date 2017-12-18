@@ -13,11 +13,25 @@
 //! to the traits defined in crate `digest`, optionally augmented with
 //! generic, byte order aware hashing provided by crate `digest-hash`.
 //!
+//! This implementation follows the Merkle tree hash definition given in
+//! [IETF RFC 6962][rfc6962] and provides protection against potential
+//! second-preimage attacks: a 0 byte is prepended to the hash input of each
+//! leaf node, and a 1 byte is prepended to the concatenation of children's
+//! hash values when calculating the hash of an internal node. Note
+//! that while RFC 6962 only uses unbalanced full binary trees, the
+//! implementation of the Merkle tree provided by this crate permits
+//! single-child nodes to achieve uniform leaf depth. Such nodes are not
+//! treated equivalent to their child by `DefaultNodeHasher`, to avoid
+//! potentially surprising behavior when any trees that are single-node
+//! chains over a subtree with the same hash value are considered equivalent.
+//!
+//! [rfc6962]: https://tools.ietf.org/html/rfc6962#section-2.1
+//!
 //! This module is only available if the crate has been compiled with
 //! the `digest` feature, which is enabled by default.
 
 use hash::{Hasher, NodeHasher};
-use tree::{Nodes, Node};
+use tree::Nodes;
 
 pub extern crate digest_hash;
 
@@ -32,10 +46,8 @@ use std::marker::PhantomData;
 
 /// The `NodeHasher` implementation used by default in this module.
 ///
-/// This implementation provides protection against potential
-/// second-preimage attacks by prepending the hash of each child node
-/// with a byte value indicating the node's type: 0 is prepended for
-/// leaf nodes, 1 for hash nodes.
+/// This implementation concatenates the hash values of the child nodes,
+/// prepended with a 1 byte, as input for the digest function.
 pub struct DefaultNodeHasher<D> {
     phantom: PhantomData<D>
 }
@@ -65,22 +77,14 @@ where D: Default,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
-    fn hash_nodes<'a, L>(&'a self,
-                         iter: Nodes<'a, Self::HashOutput, L>)
-                         -> Self::HashOutput
-    {
+    fn hash_nodes<'a, L>(
+        &'a self,
+        iter: Nodes<'a, Self::HashOutput, L>
+    ) -> Self::HashOutput {
         let mut digest = D::default();
+        digest.process(&[1u8]);
         for node in iter {
-            match *node {
-                Node::Leaf(ref ln) => {
-                    digest.process(&[0u8]);
-                    digest.process(ln.hash_bytes());
-                }
-                Node::Hash(ref hn) => {
-                    digest.process(&[1u8]);
-                    digest.process(hn.hash_bytes());
-                }
-            }
+            digest.process(node.hash_bytes());
         }
         digest.fixed_result()
     }
@@ -172,6 +176,7 @@ where In: Hash,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
+        digest.process(&[0u8]);
         input.hash(&mut digest);
         digest.fixed_result()
     }
@@ -278,6 +283,7 @@ where In: AsRef<[u8]>,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
+        digest.process(&[0u8]);
         digest.process(input.as_ref());
         digest.fixed_result()
     }
@@ -302,7 +308,7 @@ mod tests {
     use super::{DigestHasher, ByteDigestHasher};
     use hash::{Hasher, NodeHasher};
 
-    use tree::{Builder, Node, Nodes};
+    use tree::{Builder, Nodes};
     use leaf;
 
     extern crate sha2;
@@ -316,18 +322,27 @@ mod tests {
 
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
+    fn leaf_digest(
+        input: &[u8]
+    ) -> GenericArray<u8, <Sha256 as FixedOutput>::OutputSize> {
+        let mut digest = Sha256::new();
+        digest.input(&[0u8]);
+        digest.input(input);
+        digest.result()
+    }
+
     #[test]
     fn hash_byte_input() {
         let hasher = ByteDigestHasher::<Sha256>::new();
         let hash = hasher.hash_input(&TEST_DATA);
-        assert_eq!(hash, Sha256::digest(TEST_DATA));
+        assert_eq!(hash, leaf_digest(TEST_DATA));
     }
 
     #[test]
     fn hash_endian_input() {
         let hasher = DigestHasher::<BigEndian<Sha256>>::new();
         let hash = hasher.hash_input(&42u16);
-        assert_eq!(hash, Sha256::digest(&[0, 42][..]));
+        assert_eq!(hash, leaf_digest(&[0, 42][..]));
     }
 
     #[derive(Default)]
@@ -348,14 +363,7 @@ mod tests {
         {
             let mut digest = Sha256::default();
             for node in iter {
-                match *node {
-                    Node::Leaf(ref ln) => {
-                        digest.process(ln.hash_bytes());
-                    }
-                    Node::Hash(ref hn) => {
-                        digest.process(hn.hash_bytes());
-                    }
-                }
+                digest.process(node.hash_bytes())
             }
             digest.fixed_result()
         }
@@ -372,7 +380,7 @@ mod tests {
         let tree = builder.finish().unwrap();
         let mut root_digest = Sha256::new();
         TEST_DATA.chunks(CHUNK_SIZE).map(|chunk| {
-            Sha256::digest(chunk)
+            leaf_digest(chunk)
         }).for_each(|leaf_hash| {
             root_digest.process(leaf_hash.as_slice());
         });
@@ -390,7 +398,7 @@ mod tests {
         let tree = builder.finish().unwrap();
         let mut root_digest = Sha256::new();
         test_input.iter().map(|v| {
-            Sha256::digest(&[0, *v as u8])
+            leaf_digest(&[0, *v as u8])
         }).for_each(|leaf_hash| {
             root_digest.process(leaf_hash.as_slice());
         });
