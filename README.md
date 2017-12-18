@@ -31,7 +31,7 @@ gets stored inside leaf nodes.
   second-preimage attacks, can be provided by default.
 
 * Building both left-filled, uniform-leaf-depth binary trees permitting
-  single-child rightmost internal nodes (as in Bitcoin), and full, but not
+  rightmost "angle" internal nodes (as in Bitcoin), and full, but not
   necessarily balanced binary trees (as in Certificate Transparency),
   should be supported as primary use cases.
 
@@ -47,12 +47,8 @@ by `tree::Builder`, `tree::parallel::Builder`, and related types.
 
 ## Future additions
 
-Verification trees consisting only of hashes, used to verify integrity of
-content retrieved separately, can be thought of as a special case of
-`MerkleTree` with hash values for input. The API should provide the ability
-to verify a tree built from content against its verification counterpart
-obtained elsewhere, which may not have the same depth. This is not implemented
-yet.
+Audit paths, consisting of the root hash and a chain of side node hashes
+needed to verify integrity of a leaf's data, need to be supported.
 
 The input to make a leaf node cannot yet be provided incrementally. There is
 an idea how to implement this in an elegant way.
