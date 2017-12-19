@@ -14,6 +14,9 @@
 //! Optional support is provided for the cryptographic hash functions
 //! that conform to the API defined in crate `digest`.
 
+#[cfg(feature = "serialization")]
+#[macro_use] extern crate serde_derive;
+
 pub mod hash;
 pub mod leaf;
 pub mod tree;

@@ -49,6 +49,7 @@ use std::hash as std_hash;
 /// swap out nodes in safe code because doing so would violate
 /// the hash integrity.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct MerkleTree<H, T> {
     root: Node<H, T>
 }
@@ -56,6 +57,7 @@ pub struct MerkleTree<H, T> {
 /// A Merkle tree node, which can be either a leaf node or a hash node.
 ///
 /// `Node` values can be borrowed from under a `MerkleTree`.
+#[cfg_attr(feature = "serialization", derive(Serialize))]
 pub enum Node<H, T> {
     /// A leaf node value.
     Leaf(LeafNode<H, T>),
@@ -67,6 +69,7 @@ pub enum Node<H, T> {
 ///
 /// `LeafNode` values can be obtained by destructuring `Node`.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct LeafNode<H, T> {
     hash: H,
     data: T
@@ -76,6 +79,7 @@ pub struct LeafNode<H, T> {
 ///
 /// `HashNode` values can be obtained by destructuring `Node`.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct HashNode<H, T> {
     hash: H,
     children: Box<[Node<H, T>]>
