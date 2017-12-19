@@ -750,6 +750,14 @@ mod tests {
     }
 
     #[test]
+    fn cant_make_full_from_empty() {
+        use std::iter::empty;
+        let builder = Builder::<MockHasher, _>::new();
+        let err = builder.full_tree_from(empty::<[u8; 1]>()).unwrap_err();
+        println!("error {:?}: {}", err, err);
+    }
+
+    #[test]
     fn full_tree_is_full() {
         let builder = Builder::<MockHasher, _>::new();
         let tree = builder.full_tree_from(TEST_DATA.chunks(7)).unwrap();
