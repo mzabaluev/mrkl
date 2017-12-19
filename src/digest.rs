@@ -34,10 +34,11 @@ use hash::{Hasher, NodeHasher};
 use tree::Children;
 
 pub extern crate digest_hash;
+pub extern crate generic_array;
 
 use self::digest_hash::{Hash, Endian, EndianInput};
 use self::digest_hash::digest::{Input, FixedOutput};
-use self::digest_hash::digest::generic_array::GenericArray;
+use self::generic_array::GenericArray;
 
 use std::fmt;
 use std::fmt::Debug;
@@ -316,7 +317,7 @@ mod tests {
     use self::sha2::{Sha256, Digest};
     use super::digest_hash::BigEndian;
     use super::digest_hash::digest::{Input, FixedOutput};
-    use super::digest_hash::digest::generic_array::GenericArray;
+    use super::generic_array::GenericArray;
     use std::fmt;
     use std::fmt::Debug;
 
