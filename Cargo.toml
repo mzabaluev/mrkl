@@ -11,7 +11,7 @@ digest = ["digest-hash"]
 parallel = ["rayon"]
 
 [dependencies.digest-hash]
-git = "https://github.com/mzabaluev/digest-hash-rs.git"
+version = "0.1"
 optional = true
 
 [dependencies.rayon]
