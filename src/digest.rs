@@ -79,7 +79,7 @@ where D: Default,
 
     fn hash_children<'a, L>(
         &'a self,
-        mut iter: Children<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>
     ) -> Self::HashOutput {
         let mut digest = D::default();
         digest.process(&[1u8]);
