@@ -23,7 +23,8 @@
 //! single-child nodes to achieve uniform leaf depth. Such nodes are not
 //! treated equivalent to their child by `DefaultNodeHasher`, to avoid
 //! potentially surprising behavior when any trees that are single-node
-//! chains over a subtree with the same hash value are considered equivalent.
+//! chains over a subtree with the same hash value are considered equivalent
+//! to that subtree.
 //!
 //! [rfc6962]: https://tools.ietf.org/html/rfc6962#section-2.1
 //!
