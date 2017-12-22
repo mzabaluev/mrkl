@@ -68,7 +68,7 @@ use super::plumbing::FromNodes;
 /// This is a data-parallel workalike of the sequential `tree::Builder`.
 /// Where the sequential `Builder` works with tree instances and sequential
 /// iterators, this API uses thread-safe closures and Rayon's parallel
-/// iterators to obtain children for a new tree's root in a potentially
+/// iterators to obtain children for new tree's root in a potentially
 /// parallelized way.
 #[derive(Clone, Debug, Default)]
 pub struct Builder<D, L>
