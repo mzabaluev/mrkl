@@ -19,7 +19,7 @@ serialization = ["serde", "serde_derive", "generic-array/serde"]
 generic-array = "0.9"
 
 [dependencies.digest-hash]
-version = "0.1"
+version = "0.2"
 optional = true
 
 [dependencies.rayon]
