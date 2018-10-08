@@ -201,7 +201,7 @@ where
 
     fn complete_tree_from_iter<I>(
         &self,
-        mut iter: I,
+        iter: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
     where
         I: IndexedParallelIterator<Item = L::Input>,
@@ -297,7 +297,7 @@ where
 
     fn full_tree_from_iter<I>(
         &self,
-        mut iter: I,
+        iter: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
     where
         I: IndexedParallelIterator<Item = L::Input>,
