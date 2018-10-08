@@ -84,9 +84,9 @@ where D: Default,
         iter: Children<'a, Self::HashOutput, L>
     ) -> Self::HashOutput {
         let mut digest = D::default();
-        digest.process(&[1u8]);
+        digest.input(&[1u8]);
         for node in iter {
-            digest.process(node.hash_bytes());
+            digest.input(node.hash_bytes());
         }
         digest.fixed_result()
     }
@@ -178,7 +178,7 @@ where In: Hash,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
-        digest.process(&[0u8]);
+        digest.input(&[0u8]);
         input.hash(&mut digest);
         digest.fixed_result()
     }
@@ -285,8 +285,8 @@ where In: AsRef<[u8]>,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
-        digest.process(&[0u8]);
-        digest.process(input.as_ref());
+        digest.input(&[0u8]);
+        digest.input(input.as_ref());
         digest.fixed_result()
     }
 }
@@ -317,7 +317,7 @@ mod tests {
 
     use self::sha2::{Sha256, Digest};
     use super::digest_hash::BigEndian;
-    use super::digest_hash::digest::{Input, FixedOutput};
+    use super::digest_hash::digest::FixedOutput;
     use super::generic_array::GenericArray;
     use std::fmt;
     use std::fmt::Debug;
@@ -325,11 +325,11 @@ mod tests {
     const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
 
     fn leaf_digest(
-        input: &[u8]
+        data: &[u8]
     ) -> GenericArray<u8, <Sha256 as FixedOutput>::OutputSize> {
         let mut digest = Sha256::new();
         digest.input(&[0u8]);
-        digest.input(input);
+        digest.input(data);
         digest.result()
     }
 
@@ -365,7 +365,7 @@ mod tests {
         ) -> Self::HashOutput {
             let mut digest = Sha256::default();
             for node in iter {
-                digest.process(node.hash_bytes())
+                digest.input(node.hash_bytes())
             }
             digest.fixed_result()
         }
@@ -387,7 +387,7 @@ mod tests {
         TEST_DATA.chunks(CHUNK_SIZE).map(|chunk| {
             leaf_digest(chunk)
         }).for_each(|leaf_hash| {
-            root_digest.process(leaf_hash.as_slice());
+            root_digest.input(leaf_hash.as_slice());
         });
         assert_eq!(*tree.root().hash(), root_digest.fixed_result());
     }
@@ -408,7 +408,7 @@ mod tests {
         test_input.iter().map(|v| {
             leaf_digest(&[0, *v as u8])
         }).for_each(|leaf_hash| {
-            root_digest.process(leaf_hash.as_slice());
+            root_digest.input(leaf_hash.as_slice());
         });
         assert_eq!(*tree.root().hash(), root_digest.fixed_result());
     }
