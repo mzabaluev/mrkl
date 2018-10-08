@@ -19,12 +19,11 @@ impl<In: AsRef<[u8]>> Hasher<In> for MockHasher {
 }
 
 impl NodeHasher for MockHasher {
-
     type HashOutput = Vec<u8>;
 
     fn hash_children<'a, L>(
         &'a self,
-        iter: Children<'a, Vec<u8>, L>
+        iter: Children<'a, Vec<u8>, L>,
     ) -> Vec<u8> {
         let mut dump = Vec::new();
         for node in iter {
@@ -43,4 +42,3 @@ impl NodeHasher for MockHasher {
         dump
     }
 }
-

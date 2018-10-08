@@ -14,6 +14,6 @@ pub trait FromNodes {
 
     fn tree_from_nodes(
         &self,
-        nodes: Vec<Node<Self::HashOutput, Self::LeafData>>
+        nodes: Vec<Node<Self::HashOutput, Self::LeafData>>,
     ) -> BuildResult<Self::HashOutput, Self::LeafData>;
 }

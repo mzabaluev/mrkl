@@ -6,17 +6,17 @@ extern crate mrkl;
 
 #[cfg(feature = "digest")]
 mod digest {
-    extern crate sha2;
     extern crate digest_hash;
+    extern crate sha2;
 
     mod prelude {
-        pub use test::Bencher;
         pub use test::black_box;
+        pub use test::Bencher;
 
-        pub use mrkl::digest::ByteDigestHasher;
-        pub use super::sha2::Sha256;
-        pub use super::sha2::Digest;
         pub use super::digest_hash::digest::generic_array::GenericArray;
+        pub use super::sha2::Digest;
+        pub use super::sha2::Sha256;
+        pub use mrkl::digest::ByteDigestHasher;
 
         pub type Hasher = ByteDigestHasher<Sha256>;
     }
@@ -34,11 +34,11 @@ mod digest {
 
             b.iter(|| {
                 let mut hash = GenericArray::default();
-                for _ in 0 .. 100 {
+                for _ in 0..100 {
                     hash = Sha256::digest(block);
                     hash = black_box(hash);
                 }
-                for _ in 0 .. 100 - 1 {
+                for _ in 0..100 - 1 {
                     let mut digest = Sha256::new();
                     digest.input(&[0u8][..]);
                     digest.input(&hash);

@@ -56,12 +56,11 @@ pub extern crate rayon;
 
 use self::rayon::prelude::*;
 
+use super::plumbing::FromNodes;
 use hash::Hasher;
 use leaf;
 use tree;
-use tree::{MerkleTree, EmptyTree, BuildResult};
-use super::plumbing::FromNodes;
-
+use tree::{BuildResult, EmptyTree, MerkleTree};
 
 /// A parallel Merkle tree builder utilizing a work-stealing thread pool.
 ///
@@ -72,32 +71,37 @@ use super::plumbing::FromNodes;
 /// parallelized way.
 #[derive(Clone, Debug, Default)]
 pub struct Builder<D, L>
-where D: Hasher<L::Input>,
-      L: leaf::ExtractData,
+where
+    D: Hasher<L::Input>,
+    L: leaf::ExtractData,
 {
-    inner: tree::Builder<D, L>
+    inner: tree::Builder<D, L>,
 }
 
 impl<D, In> Builder<D, leaf::NoData<In>>
-where D: Hasher<In> + Default
+where
+    D: Hasher<In> + Default,
 {
     /// Constructs a `Builder` with a default instance of the hash extractor,
     /// and `NoData` in place of the leaf data extractor.
     /// The constructed tree will contain only hash values in its leaf nodes.
     pub fn new() -> Self {
-        Builder { inner: tree::Builder::new() }
+        Builder {
+            inner: tree::Builder::new(),
+        }
     }
 }
 
 impl<D, L> Builder<D, L>
-where D: Hasher<L::Input>,
-      L: leaf::ExtractData
+where
+    D: Hasher<L::Input>,
+    L: leaf::ExtractData,
 {
     /// Constructs a `Builder` from the given instances of the hasher
     /// and the leaf data extractor.
     pub fn from_hasher_leaf_data(hasher: D, leaf_data_extractor: L) -> Self {
-        let inner = tree::Builder::from_hasher_leaf_data(
-                hasher, leaf_data_extractor);
+        let inner =
+            tree::Builder::from_hasher_leaf_data(hasher, leaf_data_extractor);
         Builder { inner }
     }
 
@@ -112,7 +116,7 @@ where D: Hasher<L::Input>,
     /// extractor used by this `Builder`.
     pub fn make_leaf(
         &self,
-        input: L::Input
+        input: L::Input,
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         self.inner.make_leaf(input)
     }
@@ -128,18 +132,19 @@ where D: Hasher<L::Input>,
     /// as the single element in the `Children` iterator.
     pub fn chain_lone_child(
         &self,
-        child: MerkleTree<D::HashOutput, L::LeafData>
+        child: MerkleTree<D::HashOutput, L::LeafData>,
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         self.inner.chain_lone_child(child)
     }
 }
 
 impl<D, L> Builder<D, L>
-where D: Hasher<L::Input> + Clone + Send,
-      L: leaf::ExtractData + Clone + Send,
-      D::HashOutput: Send,
-      L::Input: Send,
-      L::LeafData: Send
+where
+    D: Hasher<L::Input> + Clone + Send,
+    L: leaf::ExtractData + Clone + Send,
+    D::HashOutput: Send,
+    L::Input: Send,
+    L::LeafData: Send,
 {
     /// Constructs a left-filled, same-leaf-depth binary Merkle tree from a
     /// parallel iterator over input values with a known length, or anything
@@ -185,30 +190,33 @@ where D: Hasher<L::Input> + Clone + Send,
     ///
     pub fn complete_tree_from<I>(
         &self,
-        iterable: I
+        iterable: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: IntoParallelIterator<Item = L::Input>,
-          I::Iter: IndexedParallelIterator,
+    where
+        I: IntoParallelIterator<Item = L::Input>,
+        I::Iter: IndexedParallelIterator,
     {
         self.complete_tree_from_iter(iterable.into_par_iter())
     }
 
     fn complete_tree_from_iter<I>(
         &self,
-        mut iter: I
+        mut iter: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: IndexedParallelIterator<Item = L::Input> {
+    where
+        I: IndexedParallelIterator<Item = L::Input>,
+    {
         if iter.len() == 0 {
             return Err(EmptyTree);
         }
-        let leaves: Vec<_> =
-            iter.map_with(self.clone(), |master, input| {
-                master.make_leaf(input)
-            })
+        let leaves: Vec<_> = iter
+            .map_with(self.clone(), |master, input| master.make_leaf(input))
             .collect();
-        assert!(leaves.len() != 0,
-                "the parallel iterator that reported nonzero length \
-                 has come up empty");
+        assert!(
+            leaves.len() != 0,
+            "the parallel iterator that reported nonzero length \
+             has come up empty"
+        );
         let perfect_len = leaves.len().checked_next_power_of_two().unwrap();
         Ok(self.reduce_complete(leaves, perfect_len))
     }
@@ -216,7 +224,7 @@ where D: Hasher<L::Input> + Clone + Send,
     fn reduce_complete(
         &self,
         mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>,
-        perfect_len: usize
+        perfect_len: usize,
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let len = level_nodes.len();
         debug_assert!(len != 0);
@@ -235,8 +243,8 @@ where D: Hasher<L::Input> + Clone + Send,
             let left_builder = self.clone();
             let right_builder = self.clone();
             self.join(
-                move || { left_builder.reduce_complete(left, left_len) },
-                move || { right_builder.reduce_complete(right, left_len) }
+                move || left_builder.reduce_complete(left, left_len),
+                move || right_builder.reduce_complete(right, left_len),
             )
         }
     }
@@ -278,36 +286,39 @@ where D: Hasher<L::Input> + Clone + Send,
     ///
     pub fn full_tree_from<I>(
         &self,
-        iterable: I
+        iterable: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: IntoParallelIterator<Item = L::Input>,
-          I::Iter: IndexedParallelIterator,
+    where
+        I: IntoParallelIterator<Item = L::Input>,
+        I::Iter: IndexedParallelIterator,
     {
         self.full_tree_from_iter(iterable.into_par_iter())
     }
 
     fn full_tree_from_iter<I>(
         &self,
-        mut iter: I
+        mut iter: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: IndexedParallelIterator<Item = L::Input> {
+    where
+        I: IndexedParallelIterator<Item = L::Input>,
+    {
         if iter.len() == 0 {
             return Err(EmptyTree);
         }
-        let leaves: Vec<_> =
-            iter.map_with(self.clone(), |master, input| {
-                master.make_leaf(input)
-            })
+        let leaves: Vec<_> = iter
+            .map_with(self.clone(), |master, input| master.make_leaf(input))
             .collect();
-        assert!(leaves.len() != 0,
-                "the parallel iterator that reported nonzero length \
-                 has come up empty");
+        assert!(
+            leaves.len() != 0,
+            "the parallel iterator that reported nonzero length \
+             has come up empty"
+        );
         Ok(self.reduce_full(leaves))
     }
 
     fn reduce_full(
         &self,
-        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>
+        mut level_nodes: Vec<MerkleTree<D::HashOutput, L::LeafData>>,
     ) -> MerkleTree<D::HashOutput, L::LeafData> {
         let len = level_nodes.len();
         debug_assert!(len != 0);
@@ -320,18 +331,19 @@ where D: Hasher<L::Input> + Clone + Send,
             let left_builder = self.clone();
             let right_builder = self.clone();
             self.join(
-                move || { left_builder.reduce_full(left) },
-                move || { right_builder.reduce_full(right) }
+                move || left_builder.reduce_full(left),
+                move || right_builder.reduce_full(right),
             )
         }
     }
 }
 
 impl<D, L> Builder<D, L>
-where D: Hasher<L::Input>,
-      L: leaf::ExtractData,
-      D::HashOutput: Send,
-      L::LeafData: Send
+where
+    D: Hasher<L::Input>,
+    L: leaf::ExtractData,
+    D::HashOutput: Send,
+    L::LeafData: Send,
 {
     /// Joins the Merkle trees produced by two closures, potentially ran in
     /// parallel by `rayon::join()`, to produce a tree with a new root node,
@@ -343,10 +355,11 @@ where D: Hasher<L::Input>,
     pub fn join<LF, RF>(
         &self,
         left: LF,
-        right: RF
+        right: RF,
     ) -> MerkleTree<D::HashOutput, L::LeafData>
-    where LF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send,
-          RF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send
+    where
+        LF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send,
+        RF: FnOnce() -> MerkleTree<D::HashOutput, L::LeafData> + Send,
     {
         let (left_tree, right_tree) = rayon::join(left, right);
         self.inner.join(left_tree, right_tree)
@@ -365,20 +378,22 @@ where D: Hasher<L::Input>,
     ///
     pub fn collect_children_from<I>(
         &self,
-        iterable: I
+        iterable: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: IntoParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
+    where
+        I: IntoParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>,
     {
         self.collect_children_from_iter(iterable.into_par_iter())
     }
 
     fn collect_children_from_iter<I>(
         &self,
-        iter: I
+        iter: I,
     ) -> BuildResult<D::HashOutput, L::LeafData>
-    where I: ParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>
+    where
+        I: ParallelIterator<Item = MerkleTree<D::HashOutput, L::LeafData>>,
     {
-        let nodes: Vec<_> = iter.map(|tree| { tree.root }).collect();
+        let nodes: Vec<_> = iter.map(|tree| tree.root).collect();
         self.inner.tree_from_nodes(nodes)
     }
 }
@@ -387,19 +402,22 @@ where D: Hasher<L::Input>,
 mod tests {
     use super::Builder;
 
-    use super::rayon::prelude::*;
     use super::rayon::iter;
+    use super::rayon::prelude::*;
 
+    use super::super::testmocks::MockHasher;
     use leaf;
     use tree::Node;
-    use super::super::testmocks::MockHasher;
 
-    const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
+    const TEST_DATA: &'static [u8] =
+        b"The quick brown fox jumps over the lazy dog";
 
     #[test]
     fn complete_tree_from_empty() {
         let builder = Builder::<MockHasher, _>::new();
-        builder.complete_tree_from(iter::empty::<[u8; 1]>()).unwrap_err();
+        builder
+            .complete_tree_from(iter::empty::<[u8; 1]>())
+            .unwrap_err();
     }
 
     #[test]
@@ -435,7 +453,7 @@ mod tests {
         let tree = builder.complete_tree_from(data).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             let expected: &[u8] =
-                    b"#(#(>The quick >brown fox )#(>jumps over> the lazy ))\
+                b"#(#(>The quick >brown fox )#(>jumps over> the lazy ))\
                       #(#(>dog))";
             assert_eq!(hn.hash_bytes(), expected);
             assert_eq!(hn.children.len(), 2);
@@ -475,8 +493,7 @@ mod tests {
         let data: Vec<_> = TEST_DATA.chunks(7).collect();
         let tree = builder.full_tree_from(data).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
-            let expected: &[u8] =
-                    b"#(#(>The qui>ck brow)#(>n fox j>umps ov))\
+            let expected: &[u8] = b"#(#(>The qui>ck brow)#(>n fox j>umps ov))\
                       #(#(>er the >lazy do)>g)";
             assert_eq!(hn.hash_bytes(), expected);
         } else {
@@ -484,20 +501,17 @@ mod tests {
         }
     }
 
-    const TEST_STRS: [&'static str; 3] = [
-        "Panda eats,",
-        "shoots,",
-        "and leaves."];
+    const TEST_STRS: [&'static str; 3] =
+        ["Panda eats,", "shoots,", "and leaves."];
 
     #[test]
     fn collect_nodes_for_arbitrary_arity_tree() {
         let builder = Builder::<MockHasher, leaf::NoData<&'static str>>::new();
-        let iter =
-            TEST_STRS.into_par_iter().map_with(
-                builder.clone(),
-                |builder, input| {
-                    builder.make_leaf(input)
-                });
+        let iter = TEST_STRS
+            .into_par_iter()
+            .map_with(builder.clone(), |builder, input| {
+                builder.make_leaf(input)
+            });
         let tree = builder.collect_children_from(iter).unwrap();
         if let Node::Hash(ref hn) = *tree.root() {
             assert_eq!(hn.hash_bytes(), b">Panda eats,>shoots,>and leaves.");

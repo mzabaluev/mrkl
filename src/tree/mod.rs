@@ -22,7 +22,7 @@
 //! figure in hashing or equality comparisons.
 
 mod builder;
-pub use self::builder::{Builder, BuildResult, EmptyTree};
+pub use self::builder::{BuildResult, Builder, EmptyTree};
 
 #[cfg(feature = "parallel")]
 pub mod parallel;
@@ -32,11 +32,11 @@ mod plumbing;
 #[cfg(test)]
 mod testmocks;
 
-use std::iter::{Iterator, DoubleEndedIterator, ExactSizeIterator};
-use std::slice;
 use std::fmt;
 use std::fmt::Debug;
 use std::hash as std_hash;
+use std::iter::{DoubleEndedIterator, ExactSizeIterator, Iterator};
+use std::slice;
 
 /// A Merkle tree.
 ///
@@ -51,7 +51,7 @@ use std::hash as std_hash;
 #[derive(Debug)]
 #[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct MerkleTree<H, T> {
-    root: Node<H, T>
+    root: Node<H, T>,
 }
 
 /// A Merkle tree node, which can be either a leaf node or a hash node.
@@ -62,7 +62,7 @@ pub enum Node<H, T> {
     /// A leaf node value.
     Leaf(LeafNode<H, T>),
     /// An internal node value.
-    Hash(HashNode<H, T>)
+    Hash(HashNode<H, T>),
 }
 
 /// A value representing a leaf node in a Merkle tree.
@@ -72,7 +72,7 @@ pub enum Node<H, T> {
 #[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct LeafNode<H, T> {
     hash: H,
-    data: T
+    data: T,
 }
 
 /// A value representing an internal node in Merkle tree.
@@ -82,19 +82,21 @@ pub struct LeafNode<H, T> {
 #[cfg_attr(feature = "serialization", derive(Serialize))]
 pub struct HashNode<H, T> {
     hash: H,
-    children: Box<[Node<H, T>]>
+    children: Box<[Node<H, T>]>,
 }
 
 impl<H, T> MerkleTree<H, T> {
     /// Returns the root node of the tree as a borrowed reference.
-    pub fn root(&self) -> &Node<H, T> { &self.root }
+    pub fn root(&self) -> &Node<H, T> {
+        &self.root
+    }
 }
 
 impl<H: Debug, T: Debug> Debug for Node<H, T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match *self {
             Node::Leaf(ref ln) => ln.fmt(f),
-            Node::Hash(ref hn) => hn.fmt(f)
+            Node::Hash(ref hn) => hn.fmt(f),
         }
     }
 }
@@ -104,7 +106,7 @@ impl<H, T> Node<H, T> {
     pub fn hash(&self) -> &H {
         match *self {
             Node::Leaf(ref ln) => &ln.hash,
-            Node::Hash(ref hn) => &hn.hash
+            Node::Hash(ref hn) => &hn.hash,
         }
     }
 }
@@ -118,27 +120,35 @@ impl<H: AsRef<[u8]>, T> Node<H, T> {
 
 impl<H: AsRef<[u8]>, T> LeafNode<H, T> {
     /// Returns the hash value of the node as a byte slice.
-    pub fn hash_bytes(&self) -> &[u8] { self.hash.as_ref() }
+    pub fn hash_bytes(&self) -> &[u8] {
+        self.hash.as_ref()
+    }
 }
 
 impl<H, T> LeafNode<H, T> {
-
     /// Returns a reference to the hash value of the node.
-    pub fn hash(&self) -> &H { &self.hash }
+    pub fn hash(&self) -> &H {
+        &self.hash
+    }
 
     /// Returns a reference to the leaf data value of the node.
-    pub fn data(&self) -> &T { &self.data }
+    pub fn data(&self) -> &T {
+        &self.data
+    }
 }
 
 impl<H: AsRef<[u8]>, T> HashNode<H, T> {
     /// Returns the hash value of the node as a byte slice.
-    pub fn hash_bytes(&self) -> &[u8] { self.hash.as_ref() }
+    pub fn hash_bytes(&self) -> &[u8] {
+        self.hash.as_ref()
+    }
 }
 
 impl<H, T> HashNode<H, T> {
-
     /// Returns a reference to the hash value of the node.
-    pub fn hash(&self) -> &H { &self.hash }
+    pub fn hash(&self) -> &H {
+        &self.hash
+    }
 
     /// Borrows a child node value at the specified index.
     pub fn child_at(&self, index: usize) -> &Node<H, T> {
@@ -300,17 +310,31 @@ impl<'a, H, T> Clone for Children<'a, H, T> {
 
 impl<'a, H, T> Iterator for Children<'a, H, T> {
     type Item = &'a Node<H, T>;
-    fn next(&mut self) -> Option<Self::Item> { self.0.next() }
-    fn size_hint(&self) -> (usize, Option<usize>) { self.0.size_hint() }
-    fn count(self) -> usize { self.0.count() }
-    fn nth(&mut self, n: usize) -> Option<Self::Item> { self.0.nth(n) }
-    fn last(self) -> Option<Self::Item> { self.0.last() }
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+    fn count(self) -> usize {
+        self.0.count()
+    }
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.0.nth(n)
+    }
+    fn last(self) -> Option<Self::Item> {
+        self.0.last()
+    }
 }
 
 impl<'a, H, T> ExactSizeIterator for Children<'a, H, T> {
-    fn len(&self) -> usize { self.0.len() }
+    fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 impl<'a, H, T> DoubleEndedIterator for Children<'a, H, T> {
-    fn next_back(&mut self) -> Option<Self::Item> { self.0.next_back() }
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.0.next_back()
+    }
 }

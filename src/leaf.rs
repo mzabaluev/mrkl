@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 
 /// A way to extract data for leaf nodes of a Merkle tree.
 pub trait ExtractData {
-
     /// The type of input data.
     type Input;
 
@@ -36,12 +35,14 @@ pub trait ExtractData {
 /// nodes; the `data()` method of their `LeafNode` values returns the
 /// empty unit value.
 pub struct NoData<In> {
-    marker: PhantomData<In>
+    marker: PhantomData<In>,
 }
 
 impl<In> Default for NoData<In> {
     fn default() -> Self {
-        NoData { marker: PhantomData }
+        NoData {
+            marker: PhantomData,
+        }
     }
 }
 
@@ -60,7 +61,9 @@ impl<In> Debug for NoData<In> {
 impl<In> ExtractData for NoData<In> {
     type Input = In;
     type LeafData = ();
-    fn extract_data(&self, _: In) -> () { () }
+    fn extract_data(&self, _: In) -> () {
+        ()
+    }
 }
 
 /// Used to build a Merkle tree owning its input data.
@@ -69,11 +72,15 @@ impl<In> ExtractData for NoData<In> {
 /// input. The `data()` method of their `LeafNode` values returns
 /// a reference to the owned value.
 pub struct Owned<T> {
-    marker: PhantomData<T>
+    marker: PhantomData<T>,
 }
 
 impl<T> Default for Owned<T> {
-    fn default() -> Self { Owned { marker: PhantomData } }
+    fn default() -> Self {
+        Owned {
+            marker: PhantomData,
+        }
+    }
 }
 
 impl<T> Clone for Owned<T> {
@@ -91,7 +98,9 @@ impl<T> Debug for Owned<T> {
 impl<T> ExtractData for Owned<T> {
     type Input = T;
     type LeafData = T;
-    fn extract_data(&self, input: T) -> T { input }
+    fn extract_data(&self, input: T) -> T {
+        input
+    }
 }
 
 /// An adapter structure used to fit closures to extract leaf node data.
@@ -107,7 +116,7 @@ impl<T> ExtractData for Owned<T> {
 /// without variable captures that can be converted to an `fn` type.
 pub struct ExtractFn<In, F> {
     extractor: F,
-    phantom: PhantomData<In>
+    phantom: PhantomData<In>,
 }
 
 impl<In, F> Debug for ExtractFn<In, F> {
@@ -117,17 +126,22 @@ impl<In, F> Debug for ExtractFn<In, F> {
 }
 
 impl<In, F, Out> ExtractFn<In, F>
-    where F: Fn(In) -> Out
+where
+    F: Fn(In) -> Out,
 {
     /// Create an instance of the extractor wrapping the closure
     /// passed as the parameter.
     pub fn with(extractor: F) -> Self {
-        ExtractFn { extractor, phantom: PhantomData }
+        ExtractFn {
+            extractor,
+            phantom: PhantomData,
+        }
     }
 }
 
 impl<In, F, Out> ExtractData for ExtractFn<In, F>
-    where F: Fn(In) -> Out
+where
+    F: Fn(In) -> Out,
 {
     type Input = In;
     type LeafData = Out;
@@ -165,15 +179,13 @@ pub fn owned<In>() -> Owned<In> {
 ///
 /// For sequentially built trees, the `ExtractFn` extractor type is
 /// available that wraps arbitrary `Fn` closures.
-pub fn extract_with<In, Out>(
-    extractor: fn(In) -> Out
-) -> fn(In) -> Out {
+pub fn extract_with<In, Out>(extractor: fn(In) -> Out) -> fn(In) -> Out {
     extractor
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{no_data, owned, extract_with};
+    use super::{extract_with, no_data, owned};
 
     #[derive(Debug)]
     struct NonCloneable;
@@ -193,12 +205,11 @@ mod tests {
     #[test]
     fn result_of_extract_with_is_cloneable() {
         let _capture = NonCloneable;
-        let extractor = extract_with(
-            |s: &'static [u8]| {
-                // This breaks the test:
-                //let _ = format!("{:?}", _capture);
-                s.len()
-            });
+        let extractor = extract_with(|s: &'static [u8]| {
+            // This breaks the test:
+            //let _ = format!("{:?}", _capture);
+            s.len()
+        });
         let _ = extractor.clone();
     }
 }

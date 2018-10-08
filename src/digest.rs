@@ -37,34 +37,41 @@ use tree::Children;
 pub extern crate digest_hash;
 pub extern crate generic_array;
 
-use self::digest_hash::{Hash, Endian, EndianInput};
-use self::digest_hash::digest::{Input, FixedOutput};
+use self::digest_hash::digest::{FixedOutput, Input};
+use self::digest_hash::{Endian, EndianInput, Hash};
 use self::generic_array::GenericArray;
 
 use std::fmt;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-
 /// The `NodeHasher` implementation used by default in this module.
 ///
 /// This implementation concatenates the hash values of the child nodes,
 /// prepended with a 1 byte, as input for the digest function.
 pub struct DefaultNodeHasher<D> {
-    phantom: PhantomData<D>
+    phantom: PhantomData<D>,
 }
 
 impl<D> DefaultNodeHasher<D> {
     /// Constructs an instance of the node hasher.
-    pub fn new() -> Self { DefaultNodeHasher { phantom: PhantomData } }
+    pub fn new() -> Self {
+        DefaultNodeHasher {
+            phantom: PhantomData,
+        }
+    }
 }
 
 impl<D> Default for DefaultNodeHasher<D> {
-    fn default() -> Self { DefaultNodeHasher::new() }
+    fn default() -> Self {
+        DefaultNodeHasher::new()
+    }
 }
 
 impl<D> Clone for DefaultNodeHasher<D> {
-    fn clone(&self) -> Self { DefaultNodeHasher::new() }
+    fn clone(&self) -> Self {
+        DefaultNodeHasher::new()
+    }
 }
 
 impl<D> Debug for DefaultNodeHasher<D> {
@@ -74,14 +81,15 @@ impl<D> Debug for DefaultNodeHasher<D> {
 }
 
 impl<D> NodeHasher for DefaultNodeHasher<D>
-where D: Default,
-      D: Input + FixedOutput
+where
+    D: Default,
+    D: Input + FixedOutput,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
     fn hash_children<'a, L>(
         &'a self,
-        iter: Children<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>,
     ) -> Self::HashOutput {
         let mut digest = D::default();
         digest.input(&[1u8]);
@@ -104,17 +112,19 @@ where D: Default,
 /// enough unless a specific way to derive concatenated hashes is required.
 ///
 pub struct DigestHasher<D, Nh = DefaultNodeHasher<D>>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     node_hasher: Nh,
-    phantom: PhantomData<D>
+    phantom: PhantomData<D>,
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Default
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Default,
 {
     /// Constructs a new instance of the hash extractor.
     pub fn new() -> Self {
@@ -123,58 +133,65 @@ where D: FixedOutput,
 }
 
 impl<D, Nh> DigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
     /// instance of the node hasher.
     pub fn with_node_hasher(node_hasher: Nh) -> Self {
         DigestHasher {
             node_hasher,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
 
 impl<D, Nh> Default for DigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Default
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Default,
 {
-    fn default() -> Self { DigestHasher::new() }
+    fn default() -> Self {
+        DigestHasher::new()
+    }
 }
 
 impl<D, Nh> Clone for DigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Clone
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Clone,
 {
     fn clone(&self) -> Self {
         DigestHasher {
             node_hasher: self.node_hasher.clone(),
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
 
 impl<D, Nh> Debug for DigestHasher<D, Nh>
-where D: EndianInput + FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Debug
+where
+    D: EndianInput + FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_tuple("DigestHasher")
-         .field(&self.node_hasher)
-         .field(&Endian::<D, D::ByteOrder>::byte_order_str())
-         .finish()
+            .field(&self.node_hasher)
+            .field(&Endian::<D, D::ByteOrder>::byte_order_str())
+            .finish()
     }
 }
 
 impl<D, Nh, In: ?Sized> Hasher<In> for DigestHasher<D, Nh>
-where In: Hash,
-      D: Default,
-      D: EndianInput + FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    In: Hash,
+    D: Default,
+    D: EndianInput + FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
@@ -185,14 +202,15 @@ where In: Hash,
 }
 
 impl<D, Nh> NodeHasher for DigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
     fn hash_children<'a, L>(
         &'a self,
-        iter: Children<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>,
     ) -> Self::HashOutput {
         self.node_hasher.hash_children(iter)
     }
@@ -212,17 +230,19 @@ where D: FixedOutput,
 /// enough unless a specific way to derive concatenated hashes is required.
 ///
 pub struct ByteDigestHasher<D, Nh = DefaultNodeHasher<D>>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     node_hasher: Nh,
-    phantom: PhantomData<D>
+    phantom: PhantomData<D>,
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Default
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Default,
 {
     /// Constructs a new instance of the hash extractor.
     pub fn new() -> Self {
@@ -231,57 +251,64 @@ where D: FixedOutput,
 }
 
 impl<D, Nh> ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     /// Constructs a new instance of the hash extractor taking an
     /// instance of the node hasher.
     pub fn with_node_hasher(node_hasher: Nh) -> Self {
         ByteDigestHasher {
             node_hasher,
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
 
 impl<D, Nh> Default for ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Default
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Default,
 {
-    fn default() -> Self { ByteDigestHasher::new() }
+    fn default() -> Self {
+        ByteDigestHasher::new()
+    }
 }
 
 impl<D, Nh> Clone for ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Clone
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Clone,
 {
     fn clone(&self) -> Self {
         ByteDigestHasher {
             node_hasher: self.node_hasher.clone(),
-            phantom: PhantomData
+            phantom: PhantomData,
         }
     }
 }
 
 impl<D, Nh> Debug for ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
-      Nh: Debug
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+    Nh: Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_tuple("DigestHasher")
-         .field(&self.node_hasher)
-         .finish()
+            .field(&self.node_hasher)
+            .finish()
     }
 }
 
 impl<D, Nh, In: ?Sized> Hasher<In> for ByteDigestHasher<D, Nh>
-where In: AsRef<[u8]>,
-      D: Default,
-      D: Input + FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    In: AsRef<[u8]>,
+    D: Default,
+    D: Input + FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     fn hash_input(&self, input: &In) -> Self::HashOutput {
         let mut digest = D::default();
@@ -292,14 +319,15 @@ where In: AsRef<[u8]>,
 }
 
 impl<D, Nh> NodeHasher for ByteDigestHasher<D, Nh>
-where D: FixedOutput,
-      Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
+where
+    D: FixedOutput,
+    Nh: NodeHasher<HashOutput = GenericArray<u8, D::OutputSize>>,
 {
     type HashOutput = GenericArray<u8, D::OutputSize>;
 
     fn hash_children<'a, L>(
         &'a self,
-        iter: Children<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>,
     ) -> Self::HashOutput {
         self.node_hasher.hash_children(iter)
     }
@@ -307,25 +335,26 @@ where D: FixedOutput,
 
 #[cfg(test)]
 mod tests {
-    use super::{DigestHasher, ByteDigestHasher};
+    use super::{ByteDigestHasher, DigestHasher};
     use hash::{Hasher, NodeHasher};
 
-    use tree::{Builder, Children};
     use leaf;
+    use tree::{Builder, Children};
 
     extern crate sha2;
 
-    use self::sha2::{Sha256, Digest};
-    use super::digest_hash::BigEndian;
+    use self::sha2::{Digest, Sha256};
     use super::digest_hash::digest::FixedOutput;
+    use super::digest_hash::BigEndian;
     use super::generic_array::GenericArray;
     use std::fmt;
     use std::fmt::Debug;
 
-    const TEST_DATA: &'static [u8] = b"The quick brown fox jumps over the lazy dog";
+    const TEST_DATA: &'static [u8] =
+        b"The quick brown fox jumps over the lazy dog";
 
     fn leaf_digest(
-        data: &[u8]
+        data: &[u8],
     ) -> GenericArray<u8, <Sha256 as FixedOutput>::OutputSize> {
         let mut digest = Sha256::new();
         digest.input(&[0u8]);
@@ -361,7 +390,7 @@ mod tests {
 
         fn hash_children<'a, L>(
             &'a self,
-            iter: Children<'a, Self::HashOutput, L>
+            iter: Children<'a, Self::HashOutput, L>,
         ) -> Self::HashOutput {
             let mut digest = Sha256::default();
             for node in iter {
@@ -374,21 +403,20 @@ mod tests {
     #[test]
     fn byte_digest_with_custom_node_hasher() {
         const CHUNK_SIZE: usize = 15;
-        let hasher = ByteDigestHasher::<Sha256, _>::with_node_hasher(
-                        CustomNodeHasher);
-        let builder = Builder::from_hasher_leaf_data(
-                            hasher, leaf::no_data());
-        let leaves =
-            TEST_DATA.chunks(CHUNK_SIZE).map(|chunk| {
-                builder.make_leaf(chunk)
-            });
+        let hasher =
+            ByteDigestHasher::<Sha256, _>::with_node_hasher(CustomNodeHasher);
+        let builder = Builder::from_hasher_leaf_data(hasher, leaf::no_data());
+        let leaves = TEST_DATA
+            .chunks(CHUNK_SIZE)
+            .map(|chunk| builder.make_leaf(chunk));
         let tree = builder.collect_children_from(leaves).unwrap();
         let mut root_digest = Sha256::new();
-        TEST_DATA.chunks(CHUNK_SIZE).map(|chunk| {
-            leaf_digest(chunk)
-        }).for_each(|leaf_hash| {
-            root_digest.input(leaf_hash.as_slice());
-        });
+        TEST_DATA
+            .chunks(CHUNK_SIZE)
+            .map(|chunk| leaf_digest(chunk))
+            .for_each(|leaf_hash| {
+                root_digest.input(leaf_hash.as_slice());
+            });
         assert_eq!(*tree.root().hash(), root_digest.fixed_result());
     }
 
@@ -396,20 +424,18 @@ mod tests {
     fn endian_digest_with_custom_node_hasher() {
         let test_input = [42u16, 43u16];
         let hasher = DigestHasher::<BigEndian<Sha256>, _>::with_node_hasher(
-                        CustomNodeHasher);
-        let builder = Builder::from_hasher_leaf_data(
-                        hasher, leaf::no_data());
-        let leaves =
-            test_input.iter().map(|input| {
-                builder.make_leaf(input)
-            });
+            CustomNodeHasher,
+        );
+        let builder = Builder::from_hasher_leaf_data(hasher, leaf::no_data());
+        let leaves = test_input.iter().map(|input| builder.make_leaf(input));
         let tree = builder.collect_children_from(leaves).unwrap();
         let mut root_digest = Sha256::new();
-        test_input.iter().map(|v| {
-            leaf_digest(&[0, *v as u8])
-        }).for_each(|leaf_hash| {
-            root_digest.input(leaf_hash.as_slice());
-        });
+        test_input
+            .iter()
+            .map(|v| leaf_digest(&[0, *v as u8]))
+            .for_each(|leaf_hash| {
+                root_digest.input(leaf_hash.as_slice());
+            });
         assert_eq!(*tree.root().hash(), root_digest.fixed_result());
     }
 }

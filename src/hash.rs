@@ -15,8 +15,7 @@ use tree::Children;
 /// The abstraction provided by `Hasher` is generic over the input data type,
 /// agnostic to the implementation of the hash function, and allows different
 /// ways of calculating the hash of child nodes for their parent node.
-pub trait Hasher<In: ?Sized> : NodeHasher {
-
+pub trait Hasher<In: ?Sized>: NodeHasher {
     /// Hash an element of the input data.
     ///
     /// This method is used to calculate hash values of the leaf nodes
@@ -30,7 +29,6 @@ pub trait Hasher<In: ?Sized> : NodeHasher {
 /// agnostic to the implementation of the hash function, and allows different
 /// ways of calculating the hash of child nodes for their parent node.
 pub trait NodeHasher {
-
     /// The output of the hash function.
     type HashOutput;
 
@@ -46,6 +44,6 @@ pub trait NodeHasher {
     /// be ignored for all purposes.
     fn hash_children<'a, L>(
         &'a self,
-        iter: Children<'a, Self::HashOutput, L>
+        iter: Children<'a, Self::HashOutput, L>,
     ) -> Self::HashOutput;
 }
