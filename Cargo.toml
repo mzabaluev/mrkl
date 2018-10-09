@@ -1,6 +1,6 @@
 [package]
 name = "mrkl"
-version = "0.0.4-dev"
+version = "0.0.4"
 description = "Generic, minimalist, parallelizable Merkle tree"
 authors = ["Mikhail Zabaluev <mikhail.zabaluev@gmail.com>"]
 repository = "https://github.com/mzabaluev/mrkl"
